@@ -33,7 +33,7 @@ export const PermissionBadge: React.FunctionComponent<IPermissionBadgeProps> = (
 
     return (
         <span className={`${styles.permissionBadge} ${styleClass}`}
-            style={!styleClass ? getBadgeStyle(permission, isInheritanceStatus) : undefined}>
+            style={styleClass ? undefined : getBadgeStyle(permission, isInheritanceStatus)}>
             {text}
         </span>
     );
