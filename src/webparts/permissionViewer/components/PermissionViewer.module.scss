@@ -1,0 +1,314 @@
+@import '~@fluentui/react/dist/sass/References';
+
+.permissionViewer {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+  .webpartContainer {
+    max-width: 1200px;
+    margin: 20px auto;
+    background: "[theme: bodyBackground, default: #ffffff]";
+    color: "[theme: bodyText, default: #323130]";
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  .header {
+    background: "[theme: themePrimary, default: #0078d4]";
+    padding: 24px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h1 {
+      color: "[theme: white, default: #ffffff]";
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0;
+    }
+  }
+
+  .statsContainer {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding: 24px 32px;
+    background: "[theme: neutralLighterAlt, default: #faf9f8]";
+  }
+
+  .statCard {
+    background: "[theme: cardStandoutBackground, default: #ffffff]";
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+
+    &:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+    }
+  }
+
+  .statIcon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: "[theme: themePrimary, default: #0078d4]";
+  }
+
+  .statNumber {
+    font-size: 32px;
+    font-weight: 700;
+    color: "[theme: bodyText, default: #323130]";
+    margin: 8px 0;
+  }
+
+  .statLabel {
+    font-size: 14px;
+    color: "[theme: neutralSecondary, default: #605e5c]";
+  }
+
+  .tabsContainer {
+    border-bottom: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+    padding: 0 32px;
+    background: "[theme: bodyBackground, default: #ffffff]";
+  }
+
+  .toolbar {
+    padding: 16px 32px;
+    background: "[theme: bodyBackground, default: #ffffff]";
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+  }
+
+  .searchBox {
+    flex: 1;
+    max-width: 400px;
+  }
+
+  .exportBtn {
+    // Buttons are usually handled by Fluent UI styles, but for custom class override:
+    background: "[theme: themePrimary, default: #0078d4]";
+    color: "[theme: white, default: #ffffff]";
+    border: none;
+    padding: 8px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+
+    &:hover {
+      background: "[theme: themeDark, default: #005a9e]";
+    }
+
+    &:disabled {
+      background: "[theme: neutralTertiaryAlt, default: #c8c6c4]";
+      cursor: default;
+    }
+  }
+
+  .content {
+    padding: 24px 32px;
+    background: "[theme: bodyBackground, default: #ffffff]";
+  }
+
+  .permissionTable {
+    width: 100%;
+    border-collapse: collapse;
+    background: "[theme: bodyBackground, default: #ffffff]";
+    border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+    border-radius: 4px;
+    overflow: hidden;
+
+    thead {
+      background: "[theme: neutralLighter, default: #faf9f8]";
+
+      th {
+        text-align: left;
+        padding: 12px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        color: "[theme: bodyText, default: #323130]";
+        border-bottom: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+      }
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid "[theme: neutralLighter, default: #f3f2f1]";
+      color: "[theme: bodyText, default: #323130]";
+    }
+
+    tr:hover {
+      background: "[theme: neutralLighter, default: #f3f2f1]";
+    }
+  }
+
+  .userCell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .userInfo {
+    display: flex;
+    flex-direction: column;
+
+    .userName {
+      font-size: 14px;
+      color: "[theme: bodyText, default: #323130]";
+      font-weight: 600;
+    }
+
+    .userEmail {
+      font-size: 12px;
+      color: "[theme: neutralSecondary, default: #605e5c]";
+    }
+  }
+
+  // Badges - Keep specific colors for semantics (Red/Green) but maybe ensure text contrast
+  // or use palette slots if strict theming required. For now, specific status colors are usually desired fixed.
+  .permissionBadge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid;
+    display: inline-block;
+  }
+
+  .badgeFullControl {
+    background: #fde7e9;
+    color: #a80000; // Darkened from #d13438
+    border-color: #a80000;
+  }
+
+  .badgeEdit {
+    background: #fef6f1;
+    color: #8e3c0c; // Darkened from #ca5010
+    border-color: #8e3c0c;
+  }
+
+  .badgeContribute {
+    background: #e6f2ff;
+    color: #005a9e; // Darkened from #0078d4
+    border-color: #005a9e;
+  }
+
+  .badgeRead {
+    background: #e6f7e6;
+    color: #0c5d0c; // Darkened from #107c10
+    border-color: #0c5d0c;
+  }
+
+  .badgeUnique {
+    background: #fef6f1;
+    color: #8e3c0c; // Same as Edit
+    border-color: #8e3c0c;
+  }
+
+  .badgeInherited {
+    background: "[theme: neutralLighter, default: #f3f2f1]";
+    color: "[theme: neutralSecondary, default: #605e5c]";
+    border-color: "[theme: neutralTertiary, default: #8a8886]";
+  }
+
+  // Lists
+  .listCard {
+    background: "[theme: bodyBackground, default: #ffffff]";
+    border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: "[theme: themePrimary, default: #0078d4]";
+    }
+  }
+
+  .listCardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    &:hover {
+      background-color: "[theme: neutralLighter, default: #f3f2f1]";
+    }
+  }
+
+  .listTitle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: "[theme: bodyText, default: #323130]";
+      margin: 0;
+    }
+  }
+
+  .listIcon {
+    font-size: 20px;
+  }
+
+  .listUrl {
+    font-size: 12px;
+    color: "[theme: neutralSecondary, default: #605e5c]";
+    font-style: italic;
+    margin-bottom: 16px;
+  }
+
+  .inheritedInfo {
+    // Semantic info box
+    background: "[theme: themeLighterAlt, default: #e6f2ff]";
+    border-left: 4px solid "[theme: themePrimary, default: #0078d4]";
+    border-radius: 4px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: "[theme: bodyText, default: #323130]";
+  }
+
+  .loadingState {
+    text-align: center;
+    padding: 60px 32px;
+
+    .loadingText {
+      font-size: 16px;
+      color: "[theme: neutralSecondary, default: #605e5c]";
+      margin: 12px 0;
+    }
+  }
+}
+
+// Specific fix for Deep Scan Dialog width
+.deepScanModal {
+  :global(.ms-Dialog-main) {
+    min-width: 75vw !important;
+    max-width: 75vw !important;
+    width: 75vw !important;
+    background-color: "[theme: white, default: #ffffff]" !important;
+    color: "[theme: bodyText, default: #323130]" !important;
+
+    // Ensure headers in dialog match theme
+    .ms-Dialog-title {
+      color: "[theme: bodyText, default: #323130]";
+    }
+
+    .ms-Dialog-subText {
+      color: "[theme: neutralSecondary, default: #605e5c]";
+    }
+  }
+}

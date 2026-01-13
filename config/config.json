@@ -1,0 +1,19 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.json",
+    "version": "2.0",
+    "bundles": {
+        "permission-viewer-web-part": {
+            "components": [
+                {
+                    "entrypoint": "./lib/webparts/permissionViewer/PermissionViewerWebPart.js",
+                    "manifest": "./src/webparts/permissionViewer/PermissionViewerWebPart.manifest.json"
+                }
+            ]
+        }
+    },
+    "externals": {},
+    "localizedResources": {
+        "PermissionViewerWebPartStrings": "lib/webparts/permissionViewer/loc/en-us.js",
+        "PropertyControlStrings": "node_modules/@pnp/spfx-property-controls/lib/loc/{locale}.js"
+    }
+}

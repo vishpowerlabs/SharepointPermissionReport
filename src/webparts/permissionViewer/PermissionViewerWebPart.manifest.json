@@ -1,0 +1,30 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.json",
+    "id": "76d5422e-a579-4a00-99b3-192667104868",
+    "alias": "PermissionViewerWebPart",
+    "componentType": "WebPart",
+    "version": "*",
+    "manifestVersion": 2,
+    "requiresCustomScript": false,
+    "supportedHosts": [
+        "SharePointWebPart"
+    ],
+    "preconfiguredEntries": [
+        {
+            "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+            "group": {
+                "default": "Advanced"
+            },
+            "title": {
+                "default": "Permission Viewer"
+            },
+            "description": {
+                "default": "Displays SharePoint permissions in a modern interface"
+            },
+            "officeFabricIconFontName": "Permissions",
+            "properties": {
+                "description": "Permission Viewer"
+            }
+        }
+    ]
+}

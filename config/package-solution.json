@@ -1,0 +1,40 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.2.0.json",
+    "solution": {
+        "name": "permission-viewer-client-side-solution",
+        "id": "76d5422e-a579-4a00-99b3-192667104868",
+        "version": "1.0.0.0",
+        "includeClientSideAssets": true,
+        "skipFeatureDeployment": true,
+        "isDomainIsolated": false,
+        "developer": {
+            "name": "",
+            "websiteUrl": "",
+            "privacyUrl": "",
+            "termsOfUseUrl": "",
+            "mpnId": "Undefined-1.18.2"
+        },
+        "metadata": {
+            "shortDescription": {
+                "default": "Permission Viewer"
+            },
+            "longDescription": {
+                "default": "Permission Viewer"
+            },
+            "screenshotPaths": [],
+            "videoUrl": "",
+            "categories": []
+        },
+        "features": [
+            {
+                "title": "Permission Viewer Feature",
+                "description": "The feature that activates the Permission Viewer web part",
+                "id": "5c03119e-3074-46fd-976b-c60198311f71",
+                "version": "1.0.0.0"
+            }
+        ]
+    },
+    "paths": {
+        "zippedPackage": "solution/permission-viewer.sppkg"
+    }
+}
