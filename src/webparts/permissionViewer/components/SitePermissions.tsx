@@ -59,6 +59,10 @@ const PermissionLevelCell: React.FunctionComponent<{ item: IRoleAssignment }> = 
     </div>
 );
 
+const renderPrincipalType = (item: any) => <PrincipalTypeCell item={item} />;
+
+const renderPermissionLevel = (item: any) => <PermissionLevelCell item={item} />;
+
 export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (props) => {
     const { permissions, permissionService } = props;
     const [expandedGroups, setExpandedGroups] = React.useState<Set<number>>(new Set());
@@ -127,6 +131,14 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
         return items;
     }, [permissions, expandedGroups, groupMembers, loadingGroups]);
 
+    const renderUserGroup = React.useCallback((item: any) => (
+        <UserGroupCell
+            item={item}
+            expandedGroups={expandedGroups}
+            onToggle={toggleGroup}
+        />
+    ), [expandedGroups, toggleGroup]);
+
     const columns: IColumn[] = React.useMemo(() => [
         {
             key: 'user',
@@ -134,13 +146,7 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fieldName: 'Member',
             minWidth: 200,
             maxWidth: 400,
-            onRender: (item: any) => (
-                <UserGroupCell
-                    item={item}
-                    expandedGroups={expandedGroups}
-                    onToggle={toggleGroup}
-                />
-            )
+            onRender: renderUserGroup
         },
         {
             key: 'type',
@@ -148,7 +154,7 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fieldName: 'Member',
             minWidth: 100,
             maxWidth: 150,
-            onRender: (item: IRoleAssignment) => <PrincipalTypeCell item={item} />
+            onRender: renderPrincipalType
         },
         {
             key: 'level',
@@ -156,9 +162,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fieldName: 'RoleDefinitionBindings',
             minWidth: 150,
             maxWidth: 200,
-            onRender: (item: IRoleAssignment) => <PermissionLevelCell item={item} />
+            onRender: renderPermissionLevel
         }
-    ], [expandedGroups, toggleGroup]);
+    ], [renderUserGroup]);
 
     return (
         <div className={styles.content}>
