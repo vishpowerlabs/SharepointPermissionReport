@@ -21,7 +21,7 @@ export const PermissionBadge: React.FunctionComponent<IPermissionBadgeProps> = (
 
     const getStyleKey = (perm: string): string => {
         // Normalize to camelCase
-        return 'badge' + perm.replace(/ /g, '');
+        return 'badge' + perm.replaceAll(' ', '');
     };
 
     const styleName = isInheritanceStatus

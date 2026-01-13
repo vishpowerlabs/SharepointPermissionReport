@@ -13,6 +13,52 @@ export interface ISitePermissionsProps {
     permissionService?: IPermissionService;
 }
 
+const UserGroupCell: React.FunctionComponent<{
+    item: any;
+    expandedGroups: Set<number>;
+    onToggle: (group: IRoleAssignment) => void;
+}> = ({ item, expandedGroups, onToggle }) => {
+    const isGroup = item.Member.PrincipalType === 8 || item.Member.PrincipalType === 4;
+    const isExpanded = expandedGroups.has(item.Member.Id);
+    const depth = item.depth || 0;
+
+    return (
+        <div style={{ paddingLeft: `${depth * 24}px`, display: 'flex', alignItems: 'center' }}>
+            {isGroup && depth === 0 && (
+                <IconButton
+                    iconProps={{ iconName: isExpanded ? 'ChevronDown' : 'ChevronRight' }}
+                    onClick={() => onToggle(item)}
+                    styles={{ root: { height: 24, width: 24, marginRight: 4 } }}
+                />
+            )}
+            {item.isLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontStyle: 'italic', color: '#605e5c' }}>
+                    <Spinner size={SpinnerSize.xSmall} />
+                    Loading...
+                </div>
+            ) : (
+                <UserPersona
+                    user={item.Member}
+                    secondaryText={depth > 0 ? 'Member' : undefined}
+                />
+            )}
+        </div>
+    );
+};
+
+const PrincipalTypeCell: React.FunctionComponent<{ item: IRoleAssignment }> = ({ item }) => {
+    const typeMap: { [key: number]: string } = { 1: 'User', 4: 'Security Group', 8: 'SharePoint Group' };
+    return <span>{typeMap[item.Member.PrincipalType] || 'Unknown'}</span>;
+};
+
+const PermissionLevelCell: React.FunctionComponent<{ item: IRoleAssignment }> = ({ item }) => (
+    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {item.RoleDefinitionBindings.map(role => (
+            <PermissionBadge key={role.Id} permission={role.Name} />
+        ))}
+    </div>
+);
+
 export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (props) => {
     const { permissions, permissionService } = props;
     const [expandedGroups, setExpandedGroups] = React.useState<Set<number>>(new Set());
@@ -81,41 +127,20 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
         return items;
     }, [permissions, expandedGroups, groupMembers, loadingGroups]);
 
-    const columns: IColumn[] = [
+    const columns: IColumn[] = React.useMemo(() => [
         {
             key: 'user',
             name: 'User/Group',
             fieldName: 'Member',
             minWidth: 200,
             maxWidth: 400,
-            onRender: (item: any) => {
-                const isGroup = item.Member.PrincipalType === 8 || item.Member.PrincipalType === 4;
-                const isExpanded = expandedGroups.has(item.Member.Id);
-                const depth = item.depth || 0;
-
-                return (
-                    <div style={{ paddingLeft: `${depth * 24}px`, display: 'flex', alignItems: 'center' }}>
-                        {isGroup && depth === 0 && (
-                            <IconButton
-                                iconProps={{ iconName: isExpanded ? 'ChevronDown' : 'ChevronRight' }}
-                                onClick={() => toggleGroup(item)}
-                                styles={{ root: { height: 24, width: 24, marginRight: 4 } }}
-                            />
-                        )}
-                        {item.isLoading ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontStyle: 'italic', color: '#605e5c' }}>
-                                <Spinner size={SpinnerSize.xSmall} />
-                                Loading...
-                            </div>
-                        ) : (
-                            <UserPersona
-                                user={item.Member}
-                                secondaryText={depth > 0 ? 'Member' : undefined}
-                            />
-                        )}
-                    </div>
-                );
-            }
+            onRender: (item: any) => (
+                <UserGroupCell
+                    item={item}
+                    expandedGroups={expandedGroups}
+                    onToggle={toggleGroup}
+                />
+            )
         },
         {
             key: 'type',
@@ -123,10 +148,7 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fieldName: 'Member',
             minWidth: 100,
             maxWidth: 150,
-            onRender: (item: IRoleAssignment) => {
-                const typeMap: { [key: number]: string } = { 1: 'User', 4: 'Security Group', 8: 'SharePoint Group' };
-                return <span>{typeMap[item.Member.PrincipalType] || 'Unknown'}</span>;
-            }
+            onRender: (item: IRoleAssignment) => <PrincipalTypeCell item={item} />
         },
         {
             key: 'level',
@@ -134,15 +156,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fieldName: 'RoleDefinitionBindings',
             minWidth: 150,
             maxWidth: 200,
-            onRender: (item: IRoleAssignment) => (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {item.RoleDefinitionBindings.map(role => (
-                        <PermissionBadge key={role.Id} permission={role.Name} />
-                    ))}
-                </div>
-            )
+            onRender: (item: IRoleAssignment) => <PermissionLevelCell item={item} />
         }
-    ];
+    ], [expandedGroups, toggleGroup]);
 
     return (
         <div className={styles.content}>
