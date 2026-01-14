@@ -25,6 +25,12 @@ export interface IPermissionViewerProps {
     headerOpacity?: number;
     showStats?: boolean;
     excludedLists?: string[];
+
+    buttonFontSize?: string;
+    showComponentHeader?: boolean;
+    webPartTitle?: string;
+    webPartTitleFontSize?: string;
+    contentFontSize?: string;
 }
 
 const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props) => {
@@ -189,17 +195,36 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         exportDeepScanResults(deepScanItems, deepScanListTitle);
     };
 
+    const getDialogTitle = (): string => {
+        if (scanNoResults) return 'Deep Scan Complete';
+        if (isScanning) return 'Deep Scan in Progress...';
+        return 'Start Deep Scan?';
+    };
+
+    const getDialogSubText = (): string => {
+        if (scanNoResults) {
+            return `No items with unique permissions were found in "${confirmScanList?.title}". All items inherit permissions.`;
+        }
+        if (isScanning) {
+            return `Scanning "${confirmScanList?.title}". This may take a few moments depending on the number of items...`;
+        }
+        return `This will verify every single item in "${confirmScanList?.title}" to find unique permissions. This might take a while for large lists. Continue?`;
+    };
+
     return (
         <div className={styles.permissionViewer}>
             <div className={styles.webpartContainer}>
-                <Header
-                    onRefresh={handleRefresh}
-                    isLoading={isLoading}
-                    themeVariant={props.themeVariant}
-                    opacity={props.headerOpacity ?? 100}
-                />
+                {(props.showComponentHeader !== false) && (
+                    <Header
+                        onRefresh={handleRefresh}
+                        isLoading={isLoading}
+                        themeVariant={props.themeVariant}
+                        opacity={props.headerOpacity ?? 100}
+                        title={props.webPartTitle}
+                        titleFontSize={props.webPartTitleFontSize}
+                    />
+                )}
 
-                {/* Default to true if undefined */}
                 {(props.showStats !== false) && <StatsCards stats={stats} />}
 
                 <div className={styles.tabsContainer}>
@@ -229,6 +254,10 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         onClick={handleExport}
                         disabled={isExporting || isLoading}
                         className={styles.exportBtn}
+                        styles={{
+                            root: { height: '32px' }, // Maintain height
+                            label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                        }}
                     />
                 </div>
 
@@ -239,6 +268,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         <SitePermissions
                             permissions={filteredSitePermissions}
                             permissionService={permissionService}
+                            contentFontSize={props.contentFontSize}
                         />
                     )}
 
@@ -248,18 +278,21 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                             getListPermissions={handleGetListPermissions}
                             onScanItems={handleDeepScan}
                             themeVariant={props.themeVariant}
+                            buttonFontSize={props.buttonFontSize}
+                            contentFontSize={props.contentFontSize}
                         />
                     )}
                 </div>
             </div>
 
-            {/* Deep Scan Results Modal */}
             <DeepScanDialog
                 isOpen={isDeepScanOpen}
                 onDismiss={() => setIsDeepScanOpen(false)}
                 listTitle={deepScanListTitle}
                 items={deepScanItems}
                 onDownload={downloadDeepScanResults}
+                buttonFontSize={props.buttonFontSize}
+                contentFontSize={props.contentFontSize}
             />
 
             <Dialog
@@ -267,14 +300,8 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                 onDismiss={() => { if (!isScanning) setConfirmScanList(null); }}
                 dialogContentProps={{
                     type: DialogType.normal,
-                    title: scanNoResults
-                        ? 'Deep Scan Complete'
-                        : (isScanning ? 'Deep Scan in Progress...' : 'Start Deep Scan?'),
-                    subText: scanNoResults
-                        ? `No items with unique permissions were found in "${confirmScanList?.title}". All items inherit permissions.`
-                        : (isScanning
-                            ? `Scanning "${confirmScanList?.title}". This may take a few moments depending on the number of items...`
-                            : `This will verify every single item in "${confirmScanList?.title}" to find unique permissions. This might take a while for large lists. Continue?`)
+                    title: getDialogTitle(),
+                    subText: getDialogSubText()
                 }}
             >
                 {isScanning ? (
@@ -282,11 +309,32 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                 ) : (
                     <DialogFooter>
                         {scanNoResults ? (
-                            <PrimaryButton onClick={() => setConfirmScanList(null)} text="Close" />
+                            <PrimaryButton
+                                onClick={() => setConfirmScanList(null)}
+                                text="Close"
+                                styles={{
+                                    root: { height: '32px' },
+                                    label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                }}
+                            />
                         ) : (
                             <>
-                                <PrimaryButton onClick={executeDeepScan} text="Start Scan" />
-                                <DefaultButton onClick={() => setConfirmScanList(null)} text="Cancel" />
+                                <PrimaryButton
+                                    onClick={executeDeepScan}
+                                    text="Start Scan"
+                                    styles={{
+                                        root: { height: '32px' },
+                                        label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                    }}
+                                />
+                                <DefaultButton
+                                    onClick={() => setConfirmScanList(null)}
+                                    text="Cancel"
+                                    styles={{
+                                        root: { height: '32px' },
+                                        label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                    }}
+                                />
                             </>
                         )}
                     </DialogFooter>

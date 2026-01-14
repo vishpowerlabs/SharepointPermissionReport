@@ -11,19 +11,21 @@ import styles from './PermissionViewer.module.scss';
 export interface ISitePermissionsProps {
     permissions: IRoleAssignment[];
     permissionService?: IPermissionService;
+    contentFontSize?: string;
 }
 
 const UserGroupCell: React.FunctionComponent<{
     item: any;
     expandedGroups: Set<number>;
     onToggle: (group: IRoleAssignment) => void;
-}> = ({ item, expandedGroups, onToggle }) => {
+    fontSize?: string;
+}> = ({ item, expandedGroups, onToggle, fontSize }) => {
     const isGroup = item.Member.PrincipalType === 8 || item.Member.PrincipalType === 4;
     const isExpanded = expandedGroups.has(item.Member.Id);
     const depth = item.depth || 0;
 
     return (
-        <div style={{ paddingLeft: `${depth * 24}px`, display: 'flex', alignItems: 'center' }}>
+        <div style={{ paddingLeft: `${depth * 24}px`, display: 'flex', alignItems: 'center', fontSize: fontSize }}>
             {isGroup && depth === 0 && (
                 <IconButton
                     iconProps={{ iconName: isExpanded ? 'ChevronDown' : 'ChevronRight' }}
@@ -40,28 +42,29 @@ const UserGroupCell: React.FunctionComponent<{
                 <UserPersona
                     user={item.Member}
                     secondaryText={depth > 0 ? 'Member' : undefined}
+                    fontSize={fontSize}
                 />
             )}
         </div>
     );
 };
 
-const PrincipalTypeCell: React.FunctionComponent<{ item: IRoleAssignment }> = ({ item }) => {
+const PrincipalTypeCell: React.FunctionComponent<{ item: IRoleAssignment; fontSize?: string }> = ({ item, fontSize }) => {
     const typeMap: { [key: number]: string } = { 1: 'User', 4: 'Security Group', 8: 'SharePoint Group' };
-    return <span>{typeMap[item.Member.PrincipalType] || 'Unknown'}</span>;
+    return <span style={{ fontSize: fontSize }}>{typeMap[item.Member.PrincipalType] || 'Unknown'}</span>;
 };
 
-const PermissionLevelCell: React.FunctionComponent<{ item: IRoleAssignment }> = ({ item }) => (
+const PermissionLevelCell: React.FunctionComponent<{ item: IRoleAssignment; fontSize?: string }> = ({ item, fontSize }) => (
     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         {item.RoleDefinitionBindings.map(role => (
-            <PermissionBadge key={role.Id} permission={role.Name} />
+            <PermissionBadge key={role.Id} permission={role.Name} fontSize={fontSize ? `calc(${fontSize} - 2px)` : undefined} />
         ))}
     </div>
 );
 
-const renderPrincipalType = (item: any) => <PrincipalTypeCell item={item} />;
+const renderPrincipalType = (item: any, fontSize?: string) => <PrincipalTypeCell item={item} fontSize={fontSize} />;
 
-const renderPermissionLevel = (item: any) => <PermissionLevelCell item={item} />;
+const renderPermissionLevel = (item: any, fontSize?: string) => <PermissionLevelCell item={item} fontSize={fontSize} />;
 
 export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (props) => {
     const { permissions, permissionService } = props;
@@ -136,8 +139,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             item={item}
             expandedGroups={expandedGroups}
             onToggle={toggleGroup}
+            fontSize={props.contentFontSize}
         />
-    ), [expandedGroups, toggleGroup]);
+    ), [expandedGroups, toggleGroup, props.contentFontSize]);
 
     const columns: IColumn[] = React.useMemo(() => [
         {
@@ -154,7 +158,7 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fieldName: 'Member',
             minWidth: 100,
             maxWidth: 150,
-            onRender: renderPrincipalType
+            onRender: (item) => renderPrincipalType(item, props.contentFontSize)
         },
         {
             key: 'level',
@@ -162,9 +166,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fieldName: 'RoleDefinitionBindings',
             minWidth: 150,
             maxWidth: 200,
-            onRender: renderPermissionLevel
+            onRender: (item) => renderPermissionLevel(item, props.contentFontSize)
         }
-    ], [renderUserGroup]);
+    ], [renderUserGroup, props.contentFontSize]);
 
     return (
         <div className={styles.content}>
@@ -175,8 +179,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
                     selectionMode={SelectionMode.none}
                     layoutMode={DetailsListLayoutMode.justified}
                     styles={{
-                        root: { background: '#ffffff' },
-                        headerWrapper: { background: '#faf9f8' }
+                        root: { background: '#ffffff', fontSize: props.contentFontSize },
+                        headerWrapper: { background: '#faf9f8' },
+                        contentWrapper: { fontSize: props.contentFontSize }
                     }}
                 />
             </div>

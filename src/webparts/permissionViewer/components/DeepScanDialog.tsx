@@ -14,6 +14,8 @@ export interface IDeepScanDialogProps {
     listTitle: string;
     items: IItemPermission[];
     onDownload: () => void;
+    buttonFontSize?: string;
+    contentFontSize?: string;
 }
 
 const renderTypeColumn = (item: IItemPermission) => (
@@ -45,7 +47,7 @@ const renderPermissionColumn = (item: IItemPermission) => (
 );
 
 export const DeepScanDialog: React.FunctionComponent<IDeepScanDialogProps> = (props) => {
-    const { isOpen, onDismiss, listTitle, items, onDownload } = props;
+    const { isOpen, onDismiss, listTitle, items, onDownload, buttonFontSize, contentFontSize } = props;
 
     const columns: IColumn[] = [
         {
@@ -90,6 +92,9 @@ export const DeepScanDialog: React.FunctionComponent<IDeepScanDialogProps> = (pr
         }
     ];
 
+    // Fallback font size
+    const fontSize = contentFontSize || '14px';
+
     return (
         <Dialog
             hidden={!isOpen}
@@ -111,11 +116,31 @@ export const DeepScanDialog: React.FunctionComponent<IDeepScanDialogProps> = (pr
                     columns={columns}
                     selectionMode={SelectionMode.none}
                     layoutMode={DetailsListLayoutMode.justified}
+                    styles={{
+                        root: { fontSize: fontSize },
+                        headerWrapper: { fontSize: fontSize },
+                        contentWrapper: { fontSize: fontSize }
+                    }}
                 />
             </div>
             <DialogFooter>
-                <PrimaryButton onClick={onDownload} text="Download CSV" iconProps={{ iconName: 'Download' }} />
-                <DefaultButton onClick={onDismiss} text="Close" />
+                <PrimaryButton
+                    onClick={onDownload}
+                    text="Download CSV"
+                    iconProps={{ iconName: 'Download' }}
+                    styles={{
+                        root: { height: '32px' },
+                        label: { fontSize: buttonFontSize || '12px', fontWeight: 600 }
+                    }}
+                />
+                <DefaultButton
+                    onClick={onDismiss}
+                    text="Close"
+                    styles={{
+                        root: { height: '32px' },
+                        label: { fontSize: buttonFontSize || '12px', fontWeight: 600 }
+                    }}
+                />
             </DialogFooter>
         </Dialog>
     );

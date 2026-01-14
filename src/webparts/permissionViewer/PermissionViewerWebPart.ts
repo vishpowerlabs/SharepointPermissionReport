@@ -5,7 +5,8 @@ import {
     IPropertyPaneConfiguration,
     PropertyPaneTextField,
     PropertyPaneSlider,
-    PropertyPaneToggle
+    PropertyPaneToggle,
+    PropertyPaneDropdown
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import PermissionViewer from './components/PermissionViewer';
@@ -22,6 +23,12 @@ export interface IPermissionViewerWebPartProps {
     showStats: boolean;
     excludedLists: string[];
     themeVariant: IReadonlyTheme | undefined;
+
+    buttonFontSize: string;
+    showComponentHeader: boolean;
+    webPartTitle: string;
+    webPartTitleFontSize: string;
+    contentFontSize: string;
 }
 
 export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPermissionViewerWebPartProps> {
@@ -61,7 +68,13 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                 themeVariant: this._themeVariant,
                 headerOpacity: this.properties.headerOpacity,
                 showStats: this.properties.showStats,
-                excludedLists: this.properties.excludedLists
+                excludedLists: this.properties.excludedLists,
+
+                buttonFontSize: this.properties.buttonFontSize,
+                showComponentHeader: this.properties.showComponentHeader,
+                webPartTitle: this.properties.webPartTitle,
+                webPartTitleFontSize: this.properties.webPartTitleFontSize,
+                contentFontSize: this.properties.contentFontSize || '14px'
             }
         );
 
@@ -87,6 +100,27 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                         {
                             groupName: "Settings",
                             groupFields: [
+                                PropertyPaneTextField('webPartTitle', {
+                                    label: "Web Part Title"
+                                }),
+                                PropertyPaneDropdown('webPartTitleFontSize', {
+                                    label: "Web Part Title Font Size",
+                                    options: [
+                                        { key: '20px', text: 'Medium (20px)' },
+                                        { key: '24px', text: 'Large (24px)' },
+                                        { key: '28px', text: 'Extra Large (28px)' },
+                                        { key: '32px', text: 'Huge (32px)' }
+                                    ]
+                                }),
+                                PropertyPaneDropdown('contentFontSize', {
+                                    label: "Content Font Size",
+                                    options: [
+                                        { key: '12px', text: 'Small (12px)' },
+                                        { key: '14px', text: 'Medium (14px)' },
+                                        { key: '16px', text: 'Large (16px)' },
+                                        { key: '18px', text: 'Extra Large (18px)' }
+                                    ]
+                                }),
                                 PropertyPaneTextField('description', {
                                     label: "Description"
                                 }),
@@ -117,6 +151,20 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                                         { key: "Appfiles", text: "Appfiles" }
                                     ],
                                     selectedKeys: this.properties.excludedLists
+                                }),
+                                PropertyPaneToggle('showComponentHeader', {
+                                    label: "Show Web Part Header",
+                                    checked: true
+                                }),
+                                PropertyPaneDropdown('buttonFontSize', {
+                                    label: "Button Font Size",
+                                    options: [
+                                        { key: '10px', text: 'Small (10px)' },
+                                        { key: '12px', text: 'Medium (12px)' },
+                                        { key: '14px', text: 'Large (14px)' },
+                                        { key: '16px', text: 'Extra Large (16px)' },
+                                        { key: '18px', text: 'Huge (18px)' }
+                                    ]
                                 })
                             ]
                         }

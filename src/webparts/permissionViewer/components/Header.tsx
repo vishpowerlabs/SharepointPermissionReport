@@ -10,6 +10,8 @@ export interface IHeaderProps {
     isLoading: boolean;
     themeVariant: IReadonlyTheme | undefined;
     opacity?: number;
+    title?: string;
+    titleFontSize?: string;
 }
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -45,8 +47,8 @@ export const Header: React.FunctionComponent<IHeaderProps> = (props) => {
 
     return (
         <div className={styles.header} style={backgroundStyle}>
-            <h1 style={{ fontSize: '24px', fontWeight: 600, margin: 0, color: '#ffffff' }}>
-                📊 SharePoint Permission Viewer
+            <h1 style={{ fontSize: props.titleFontSize || '24px', fontWeight: 600, margin: 0, color: '#ffffff' }}>
+                {props.title || "📊 SharePoint Permission Viewer"}
             </h1>
 
             <DefaultButton

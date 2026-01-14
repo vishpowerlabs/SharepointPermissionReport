@@ -8,6 +8,9 @@ export interface IListPermissionsProps {
     getListPermissions: (listId: string) => Promise<IRoleAssignment[]>;
     onScanItems: (listId: string) => void;
     themeVariant: IReadonlyTheme | undefined;
+
+    buttonFontSize?: string;
+    contentFontSize?: string;
 }
 
 export const ListPermissions: React.FunctionComponent<IListPermissionsProps> = (props) => {
@@ -47,6 +50,8 @@ export const ListPermissions: React.FunctionComponent<IListPermissionsProps> = (
                     onExpand={() => handleExpand(list.Id)}
                     onScanItems={() => props.onScanItems(list.Id)}
                     themeVariant={props.themeVariant}
+                    buttonFontSize={props.buttonFontSize}
+                    contentFontSize={props.contentFontSize}
                 />
             ))}
         </div>

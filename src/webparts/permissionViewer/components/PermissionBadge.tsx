@@ -4,10 +4,11 @@ import styles from './PermissionViewer.module.scss';
 export interface IPermissionBadgeProps {
     permission: string;
     isInheritanceStatus?: boolean; // if true, it's Unique/Inherited badge
+    fontSize?: string;
 }
 
 export const PermissionBadge: React.FunctionComponent<IPermissionBadgeProps> = (props) => {
-    const { permission, isInheritanceStatus } = props;
+    const { permission, isInheritanceStatus, fontSize } = props;
 
     let text = permission;
 
@@ -36,12 +37,13 @@ export const PermissionBadge: React.FunctionComponent<IPermissionBadgeProps> = (
 
     // Layout styles that must always be applied to ensure consistency
     const layoutStyles: React.CSSProperties = {
-        width: '140px',
-        minWidth: '140px',
+        width: '120px',
+        minWidth: '120px',
         display: 'inline-flex', // Override SCSS inline-block
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: '4px' // Match Deep Scan button
+        borderRadius: '4px', // Match Deep Scan button
+        fontSize: fontSize || '12px' // Apply dynamic font size
     };
 
     // Merge layout styles with color styles if no class is present
@@ -63,8 +65,8 @@ const getBadgeStyle = (permission: string, isInheritanceStatus?: boolean): React
         fontWeight: 600,
         border: '1px solid',
         display: 'inline-flex', // Changed to inline-flex
-        width: '140px',
-        minWidth: '140px',
+        width: '120px',
+        minWidth: '120px',
         justifyContent: 'center',
         alignItems: 'center'
     };

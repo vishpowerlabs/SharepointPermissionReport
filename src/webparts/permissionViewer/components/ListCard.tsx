@@ -14,10 +14,13 @@ export interface IListCardProps {
     onExpand: () => void;
     onScanItems?: (listId: string) => void;
     themeVariant: IReadonlyTheme | undefined;
+
+    buttonFontSize?: string;
+    contentFontSize?: string;
 }
 
 export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
-    const { list, permissions, isLoading, isExpanded, onExpand, themeVariant } = props;
+    const { list, permissions, isLoading, isExpanded, onExpand, themeVariant, contentFontSize } = props;
 
     // Theme colors
     const primaryColor = themeVariant?.palette?.themePrimary || '#0078d4';
@@ -34,7 +37,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                 <div className={styles.inheritedInfo} style={{ background: '#e6f2ff', borderLeft: '4px solid #0078d4', borderRadius: '4px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{ color: '#0078d4', fontSize: '20px' }}>ℹ️</span>
                     <div>
-                        <div style={{ fontSize: '14px', color: '#323130' }}>This list inherits permissions from the parent site</div>
+                        <div style={{ fontSize: contentFontSize || '14px', color: '#323130' }}>This list inherits permissions from the parent site</div>
                         <button
                             onClick={() => {/* Navigate to site perms */ }}
                             style={{
@@ -42,7 +45,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                                 border: 'none',
                                 padding: 0,
                                 color: '#0078d4',
-                                fontSize: '12px',
+                                fontSize: contentFontSize ? `calc(${contentFontSize} - 2px)` : '12px',
                                 textDecoration: 'underline',
                                 cursor: 'pointer'
                             }}>
@@ -57,7 +60,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
             return <div>Loading permissions...</div>;
         }
 
-        return <ListPermissionsTable permissions={permissions} />;
+        return <ListPermissionsTable permissions={permissions} contentFontSize={contentFontSize} />;
     };
 
     return (
@@ -80,7 +83,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                     <span className={styles.listIcon} style={{ fontSize: '20px', color: primaryColor }}>
                         {list.ItemType === 'Library' ? '📁' : '📋'}
                     </span>
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: textColor, margin: 0 }}>{list.Title}</h3>
+                    <h3 style={{ fontSize: contentFontSize || '18px', fontWeight: 600, color: textColor, margin: 0 }}>{list.Title}</h3>
                     {list.HasUniqueRoleAssignments && (
                         <Icon iconName={isExpanded ? 'ChevronUp' : 'ChevronDown'} />
                     )}
@@ -96,10 +99,10 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                                 padding: '4px 12px',
                                 borderRadius: '4px',
                                 cursor: 'pointer',
-                                fontSize: '12px',
+                                fontSize: props.buttonFontSize || '12px',
                                 fontWeight: 600,
-                                width: '140px',
-                                minWidth: '140px',
+                                width: '120px',
+                                minWidth: '120px',
                                 display: 'flex',
                                 justifyContent: 'center',
                                 alignItems: 'center'
@@ -108,7 +111,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                             🔍 Deep Scan
                         </button>
                     )}
-                    <PermissionBadge permission={list.HasUniqueRoleAssignments ? 'Unique' : 'Inherited'} isInheritanceStatus={true} />
+                    <PermissionBadge permission={list.HasUniqueRoleAssignments ? 'Unique' : 'Inherited'} isInheritanceStatus={true} fontSize={props.buttonFontSize} />
                 </div>
             </div>
             <div className={styles.listUrl} style={{ fontSize: '12px', color: '#605e5c', fontStyle: 'italic', marginBottom: '16px' }}>

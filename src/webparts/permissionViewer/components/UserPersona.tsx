@@ -6,10 +6,11 @@ import styles from './PermissionViewer.module.scss';
 export interface IUserPersonaProps {
     user: IUser;
     secondaryText?: string;
+    fontSize?: string;
 }
 
 export const UserPersona: React.FunctionComponent<IUserPersonaProps> = (props) => {
-    const { user, secondaryText } = props;
+    const { user, secondaryText, fontSize } = props;
 
     // Principal Type: 1=User, 4=Security Group, 8=SharePoint Group
     const isGroup = user.PrincipalType === 8 || user.PrincipalType === 4;
@@ -34,8 +35,8 @@ export const UserPersona: React.FunctionComponent<IUserPersonaProps> = (props) =
             // Using explicit styles here or relying on className if feasible, but coinInner isn't a valid prop in some versions
             />
             <div className={styles.userInfo} style={{ display: 'flex', flexDirection: 'column' }}>
-                <span className={styles.userName} style={{ fontSize: '14px', color: '#323130', fontWeight: 600 }}>{user.Title}</span>
-                <span className={styles.userEmail} style={{ fontSize: '12px', color: '#605e5c' }}>
+                <span className={styles.userName} style={{ fontSize: fontSize || '14px', color: '#323130', fontWeight: 600 }}>{user.Title}</span>
+                <span className={styles.userEmail} style={{ fontSize: fontSize ? `calc(${fontSize} - 2px)` : '12px', color: '#605e5c' }}>
                     {description}
                 </span>
             </div>
