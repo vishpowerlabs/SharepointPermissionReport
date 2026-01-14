@@ -173,7 +173,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             setConfirmScanList(null); // Close on error too
         } finally {
             setIsScanning(false);
-            // setIsExporting(false); 
+
         }
     };
 
