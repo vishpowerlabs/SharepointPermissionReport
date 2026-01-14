@@ -86,7 +86,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                     )}
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {list.HasUniqueRoleAssignments && props.onScanItems && (
+                    {props.onScanItems && (
                         <button
                             onClick={(e) => { e.stopPropagation(); props.onScanItems!(list.Id); }}
                             style={{

@@ -19,7 +19,7 @@ export class PermissionServiceImpl implements IPermissionService {
             const json = await response.json();
 
             if (json?.value) {
-                return json.value as IRoleAssignment[];
+                return this._processRoleAssignments(json.value as IRoleAssignment[]);
             }
             return [];
         } catch (error) {
@@ -78,7 +78,7 @@ export class PermissionServiceImpl implements IPermissionService {
             const json = await response.json();
 
             if (json?.value) {
-                return json.value as IRoleAssignment[];
+                return this._processRoleAssignments(json.value as IRoleAssignment[]);
             }
             return [];
         } catch (error) {
@@ -166,7 +166,7 @@ export class PermissionServiceImpl implements IPermissionService {
                             const permEndpoint = `${this._webUrl}/_api/web/lists(guid'${listId}')/items(${item.Id})/roleassignments?$expand=Member,RoleDefinitionBindings`;
                             const permResp = await this._spHttpClient.get(permEndpoint, SPHttpClient.configurations.v1);
                             const permJson = await permResp.json();
-                            const roles = permJson?.value ? permJson.value as IRoleAssignment[] : [];
+                            const roles = permJson?.value ? this._processRoleAssignments(permJson.value as IRoleAssignment[]) : [];
 
                             return {
                                 Id: item.Id,
@@ -201,5 +201,18 @@ export class PermissionServiceImpl implements IPermissionService {
             results.push(arrayCopy.splice(0, chunk_size));
         }
         return results;
+    }
+    private _processRoleAssignments(assignments: IRoleAssignment[]): IRoleAssignment[] {
+        if (!assignments) return [];
+
+        return assignments.map(assignment => {
+            // Filter out "Limited Access" from bindings
+            const filteredBindings = assignment.RoleDefinitionBindings.filter(binding => binding.Name !== 'Limited Access');
+
+            return {
+                ...assignment,
+                RoleDefinitionBindings: filteredBindings
+            };
+        }).filter(assignment => assignment.RoleDefinitionBindings.length > 0);
     }
 }

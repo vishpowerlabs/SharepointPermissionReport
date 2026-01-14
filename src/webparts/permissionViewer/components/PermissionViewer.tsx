@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Pivot, PivotItem } from '@fluentui/react/lib/Pivot';
 import { SearchBox } from '@fluentui/react/lib/SearchBox';
 import { DefaultButton, PrimaryButton } from '@fluentui/react/lib/Button';
+import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
 import { PermissionServiceImpl } from '../services/PermissionService';
@@ -40,6 +41,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const [permissionService, setPermissionService] = React.useState<IPermissionService>();
     const [searchText, setSearchText] = React.useState<string>('');
     const [isExporting, setIsExporting] = React.useState<boolean>(false);
+    const [isScanning, setIsScanning] = React.useState<boolean>(false);
 
     // Deep Scan State
     const [isDeepScanOpen, setIsDeepScanOpen] = React.useState<boolean>(false);
@@ -156,22 +158,22 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
         const listId = confirmScanList.id;
         const listTitle = confirmScanList.title;
-        setConfirmScanList(null); // Close confirm dialog
 
-        setIsExporting(true);
+        setIsScanning(true);
+        // setIsExporting(true); // Don't use export flag for scan loading
         try {
             const items = await permissionService.getUniquePermissionItems(listId);
-
-
-
+            setConfirmScanList(null); // Close confirm dialog only after success
             setDeepScanItems(items);
             setDeepScanListTitle(listTitle);
             setIsDeepScanOpen(true);
         } catch (e) {
             console.error(e);
             alert("Error during deep scan.");
+            setConfirmScanList(null); // Close on error too
         } finally {
-            setIsExporting(false);
+            setIsScanning(false);
+            // setIsExporting(false); 
         }
     };
 
@@ -252,20 +254,25 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                 onDownload={downloadDeepScanResults}
             />
 
-            {/* Confirmation Dialog for Deep Scan */}
             <Dialog
                 hidden={!confirmScanList}
-                onDismiss={() => setConfirmScanList(null)}
+                onDismiss={() => { if (!isScanning) setConfirmScanList(null); }}
                 dialogContentProps={{
                     type: DialogType.normal,
-                    title: 'Start Deep Scan?',
-                    subText: `This will verify every single item in "${confirmScanList?.title}" to find unique permissions. This might take a while for large lists. Continue?`
+                    title: isScanning ? 'Deep Scan in Progress...' : 'Start Deep Scan?',
+                    subText: isScanning
+                        ? `Scanning "${confirmScanList?.title}". This may take a few moments depending on the number of items...`
+                        : `This will verify every single item in "${confirmScanList?.title}" to find unique permissions. This might take a while for large lists. Continue?`
                 }}
             >
-                <DialogFooter>
-                    <PrimaryButton onClick={executeDeepScan} text="Start Scan" />
-                    <DefaultButton onClick={() => setConfirmScanList(null)} text="Cancel" />
-                </DialogFooter>
+                {isScanning ? (
+                    <Spinner size={SpinnerSize.large} label="Scanning for unique permissions..." />
+                ) : (
+                    <DialogFooter>
+                        <PrimaryButton onClick={executeDeepScan} text="Start Scan" />
+                        <DefaultButton onClick={() => setConfirmScanList(null)} text="Cancel" />
+                    </DialogFooter>
+                )}
             </Dialog>
         </div>
     );
