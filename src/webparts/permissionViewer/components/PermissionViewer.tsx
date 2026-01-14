@@ -48,6 +48,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const [deepScanItems, setDeepScanItems] = React.useState<IItemPermission[]>([]);
     const [deepScanListTitle, setDeepScanListTitle] = React.useState<string>('');
     const [confirmScanList, setConfirmScanList] = React.useState<{ id: string, title: string } | null>(null);
+    const [scanNoResults, setScanNoResults] = React.useState<boolean>(false);
 
     React.useEffect(() => {
         const service = new PermissionServiceImpl(props.spHttpClient, props.webUrl);
@@ -150,6 +151,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const handleDeepScan = async (listId: string) => {
         const list = lists.find(l => l.Id === listId);
         if (!list) return;
+        setScanNoResults(false);
         setConfirmScanList({ id: list.Id, title: list.Title });
     };
 
@@ -163,10 +165,16 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         // setIsExporting(true); // Don't use export flag for scan loading
         try {
             const items = await permissionService.getUniquePermissionItems(listId);
-            setConfirmScanList(null); // Close confirm dialog only after success
-            setDeepScanItems(items);
-            setDeepScanListTitle(listTitle);
-            setIsDeepScanOpen(true);
+
+            if (items.length > 0) {
+                setDeepScanItems(items);
+                setDeepScanListTitle(listTitle);
+                setIsDeepScanOpen(true);
+                setConfirmScanList(null); // Close confirm dialog only if opening results
+            } else {
+                setScanNoResults(true);
+                // Keep dialog open to show message
+            }
         } catch (e) {
             console.error(e);
             alert("Error during deep scan.");
@@ -259,18 +267,28 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                 onDismiss={() => { if (!isScanning) setConfirmScanList(null); }}
                 dialogContentProps={{
                     type: DialogType.normal,
-                    title: isScanning ? 'Deep Scan in Progress...' : 'Start Deep Scan?',
-                    subText: isScanning
-                        ? `Scanning "${confirmScanList?.title}". This may take a few moments depending on the number of items...`
-                        : `This will verify every single item in "${confirmScanList?.title}" to find unique permissions. This might take a while for large lists. Continue?`
+                    title: scanNoResults
+                        ? 'Deep Scan Complete'
+                        : (isScanning ? 'Deep Scan in Progress...' : 'Start Deep Scan?'),
+                    subText: scanNoResults
+                        ? `No items with unique permissions were found in "${confirmScanList?.title}". All items inherit permissions.`
+                        : (isScanning
+                            ? `Scanning "${confirmScanList?.title}". This may take a few moments depending on the number of items...`
+                            : `This will verify every single item in "${confirmScanList?.title}" to find unique permissions. This might take a while for large lists. Continue?`)
                 }}
             >
                 {isScanning ? (
                     <Spinner size={SpinnerSize.large} label="Scanning for unique permissions..." />
                 ) : (
                     <DialogFooter>
-                        <PrimaryButton onClick={executeDeepScan} text="Start Scan" />
-                        <DefaultButton onClick={() => setConfirmScanList(null)} text="Cancel" />
+                        {scanNoResults ? (
+                            <PrimaryButton onClick={() => setConfirmScanList(null)} text="Close" />
+                        ) : (
+                            <>
+                                <PrimaryButton onClick={executeDeepScan} text="Start Scan" />
+                                <DefaultButton onClick={() => setConfirmScanList(null)} text="Cancel" />
+                            </>
+                        )}
                     </DialogFooter>
                 )}
             </Dialog>

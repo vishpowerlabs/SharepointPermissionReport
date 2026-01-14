@@ -24,16 +24,32 @@ export const PermissionBadge: React.FunctionComponent<IPermissionBadgeProps> = (
         return 'badge' + perm.replaceAll(' ', '');
     };
 
-    const styleName = isInheritanceStatus
-        ? (permission === 'Unique' ? 'badgeUnique' : 'badgeInherited')
-        : getStyleKey(permission);
+    let styleName: string;
+    if (isInheritanceStatus) {
+        styleName = permission === 'Unique' ? 'badgeUnique' : 'badgeInherited';
+    } else {
+        styleName = getStyleKey(permission);
+    }
 
     // Use type assertion to avoid TS7053 since we know the keys exist from SCSS
     const styleClass = (styles as any)[styleName] || styles.permissionBadge;
 
+    // Layout styles that must always be applied to ensure consistency
+    const layoutStyles: React.CSSProperties = {
+        width: '140px',
+        minWidth: '140px',
+        display: 'inline-flex', // Override SCSS inline-block
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: '4px' // Match Deep Scan button
+    };
+
+    // Merge layout styles with color styles if no class is present
+    const combinedStyle = styleClass ? layoutStyles : { ...layoutStyles, ...getBadgeStyle(permission, isInheritanceStatus) };
+
     return (
         <span className={`${styles.permissionBadge} ${styleClass}`}
-            style={styleClass ? undefined : getBadgeStyle(permission, isInheritanceStatus)}>
+            style={combinedStyle}>
             {text}
         </span>
     );
@@ -46,7 +62,11 @@ const getBadgeStyle = (permission: string, isInheritanceStatus?: boolean): React
         fontSize: '12px',
         fontWeight: 600,
         border: '1px solid',
-        display: 'inline-block'
+        display: 'inline-flex', // Changed to inline-flex
+        width: '140px',
+        minWidth: '140px',
+        justifyContent: 'center',
+        alignItems: 'center'
     };
 
     if (isInheritanceStatus) {

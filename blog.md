@@ -58,14 +58,26 @@ The web part is fully **Theme Aware**. It doesn't just sit on the page; it feels
     *   **Excluded Lists**: Select which system lists to ignore in the report.
 3.  **Scanning**: Upon loading, the web part uses the SharePoint REST API to fetch site and list permission information. It identifies inheritance status (Unique vs. Inherited) and aggregates role assignments for display.
 
-## 5. Visuals
+## 5. Code Quality & Security
+Security is paramount when dealing with permission data. This web part has been rigorously analyzed using **SonarQube** to ensure code compliance and security.
 
-### 5.1. Web Part Output
+### 5.1. SonarQube Analysis
+The source code has undergone strict static analysis with the following results:
+- **Quality Gate**: Passed ✅
+- **Security Issues**: 0 (A Rating)
+- **Security Hotspots**: 0
+- **Reliability**: 0 Bugs (A Rating)
+
+![SonarQube Report](./assets/sonarqube_report.png)
+
+## 6. Visuals
+
+### 6.1. Web Part Output
 The main interface features a clean dashboard with statistics cards, tabs for different views, and a detailed permission table.
 
 ![Permission Viewer Output](./assets/permission_report_output.png)
 
-### 5.2. Configuration
+### 6.2. Configuration
 The web part is highly configurable to suit different needs. Administrators can filter out noise by excluding system lists directly from the property pane.
 
 ![Web Part Configuration](./assets/webpart_configuration_pane.png)
@@ -73,15 +85,15 @@ The web part is highly configurable to suit different needs. Administrators can 
 > [!NOTE]
 > *Disclaimer: The mockups shown above are for reference purposes. The actual web part interface may vary slightly in clearity or layout details but will provide the same functionality and look almost similar.*
 
-## 6. Getting Started
+## 7. Getting Started
 
-### 6.1. Toolchain Prerequisites
+### 7.1. Toolchain Prerequisites
 To set up this SPFx project locally, ensure your environment meets the following requirements:
 - **Node.js**: Version **v22.14.0** or higher.
 - **Package Manager**: NPM (included with Node.js).
 - **SPFx Tooling**: Use the latest SharePoint Framework version (v1.22.0).
 
-### 6.2. Build & Deploy
+### 7.2. Build & Deploy
 This project uses **Heft** for a fast and efficient build process.
 
 1.  **Install Dependencies**:
@@ -100,6 +112,6 @@ This project uses **Heft** for a fast and efficient build process.
     - Upload this file to your **Site Collection App Catalog** (or Tenant App Catalog).
     - Trust the application when prompted.
 
-### 6.3. Scanning Context
+### 7.3. Scanning Context
 > [!IMPORTANT]
 > **Context Awareness**: The Permission Viewer web part is context-aware. It automatically scans the **current site collection** where it is deployed and added. It does not scan the entire tenant. To view permissions for a different site collection, you must install and add the web part to a page within that specific site.

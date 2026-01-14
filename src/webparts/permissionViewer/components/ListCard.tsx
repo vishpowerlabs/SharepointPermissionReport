@@ -97,7 +97,12 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                                 borderRadius: '4px',
                                 cursor: 'pointer',
                                 fontSize: '12px',
-                                fontWeight: 600
+                                fontWeight: 600,
+                                width: '140px',
+                                minWidth: '140px',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
                             }}
                             title="Scan all files/folders in in this list for specific unique permissions">
                             🔍 Deep Scan

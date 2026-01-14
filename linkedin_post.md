@@ -18,6 +18,7 @@ A unified, single-pane-of-glass dashboard that visualizes all user and group per
 *   **Visual Badges:** Instantly spot "Full Control" vs "Read" access with color-coded indicators.
 *   **Deep Scan:** Drill down into any list to verify every single item for unique permissions.
 *   **Smart Filtering:** Automatically hides "Limited Access" noise for a clean report.
+*   **Code Quality:** Verified by SonarQube (0 Security Issues, 0 Hotspots).
 *   **Theme Aware:** Automatically adapts to your site's look and feel.
 *   **Exportable:** Download comprehensive reports to CSV for auditing.
 
