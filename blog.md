@@ -38,6 +38,9 @@ The web part provides a "Single Pane of Glass" view for all site security.
 - **Deep Scan**: Initiate a **Deep Scan** on any list or library (even inherited ones) to verify every single item. This is critical for catching individual files or folders that may have broken inheritance within an otherwise standard library.
 
 ### 3.4. Customization & Export
+- **Visual Customization**: Tailor the look and feel of the web part to match your page perfectly.
+    - **Font Sizes**: Independently configure font sizes for the Web Part Title, Content (Table headers & rows), and Buttons.
+    - **Header Control**: Toggle the display of the web part header component.
 - **Configurable Exclusions**: Easily exclude system lists (like 'Site Assets', 'Style Library', 'TaxonomyHiddenList') from the report to focus on business content.
 - **CSV Export**: Comprehensive export options for offline analysis, auditing, or archival:
     - **Site-Level Export**: Download all permissions for the site.
@@ -54,6 +57,8 @@ The web part is fully **Theme Aware**. It doesn't just sit on the page; it feels
 1.  **Installation**: Deploy the SPFx package to your app catalog and add the web part to a page.
 2.  **Configuration**: Use the property pane to configure settings such as:
     *   **Header Opacity**: Adjust the visual style of the header.
+    *   **Font Sizes**: Select your preferred size for the Web Part Title (Small to Huge), Content (Small to Extra Large), and Buttons (Small to Huge).
+    *   **Show Web Part Header**: Toggle the visibility of the "Permission Viewer" header block.
     *   **Show Statistics**: Toggle summary cards on/off.
     *   **Excluded Lists**: Select which system lists to ignore in the report.
 3.  **Scanning**: Upon loading, the web part uses the SharePoint REST API to fetch site and list permission information. It identifies inheritance status (Unique vs. Inherited) and aggregates role assignments for display.

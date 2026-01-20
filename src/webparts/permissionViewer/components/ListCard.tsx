@@ -14,13 +14,14 @@ export interface IListCardProps {
     onExpand: () => void;
     onScanItems?: (listId: string) => void;
     themeVariant: IReadonlyTheme | undefined;
+    onRemovePermission?: (principalId: number, principalName: string) => void;
 
     buttonFontSize?: string;
     contentFontSize?: string;
 }
 
 export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
-    const { list, permissions, isLoading, isExpanded, onExpand, themeVariant, contentFontSize } = props;
+    const { list, permissions, isLoading, isExpanded, onExpand, themeVariant, contentFontSize, onRemovePermission } = props;
 
     // Theme colors
     const primaryColor = themeVariant?.palette?.themePrimary || '#0078d4';
@@ -60,7 +61,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
             return <div>Loading permissions...</div>;
         }
 
-        return <ListPermissionsTable permissions={permissions} contentFontSize={contentFontSize} />;
+        return <ListPermissionsTable permissions={permissions} contentFontSize={contentFontSize} onRemovePermission={onRemovePermission} />;
     };
 
     return (

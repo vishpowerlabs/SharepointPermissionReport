@@ -12,6 +12,7 @@ export interface ISitePermissionsProps {
     permissions: IRoleAssignment[];
     permissionService?: IPermissionService;
     contentFontSize?: string;
+    onRemovePermission?: (principalId: number, principalName: string) => void;
 }
 
 const UserGroupCell: React.FunctionComponent<{
@@ -19,30 +20,48 @@ const UserGroupCell: React.FunctionComponent<{
     expandedGroups: Set<number>;
     onToggle: (group: IRoleAssignment) => void;
     fontSize?: string;
-}> = ({ item, expandedGroups, onToggle, fontSize }) => {
+    onRemovePermission?: (principalId: number, principalName: string) => void;
+}> = ({ item, expandedGroups, onToggle, fontSize, onRemovePermission }) => {
     const isGroup = item.Member.PrincipalType === 8 || item.Member.PrincipalType === 4;
+    const isUser = item.Member.PrincipalType === 1;
     const isExpanded = expandedGroups.has(item.Member.Id);
     const depth = item.depth || 0;
 
+    const handleDelete = () => {
+        if (onRemovePermission) {
+            onRemovePermission(item.Member.Id, item.Member.Title);
+        }
+    };
+
     return (
-        <div style={{ paddingLeft: `${depth * 24}px`, display: 'flex', alignItems: 'center', fontSize: fontSize }}>
-            {isGroup && depth === 0 && (
+        <div style={{ paddingLeft: `${depth * 24}px`, display: 'flex', alignItems: 'center', fontSize: fontSize, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                {isGroup && depth === 0 && (
+                    <IconButton
+                        iconProps={{ iconName: isExpanded ? 'ChevronDown' : 'ChevronRight' }}
+                        onClick={() => onToggle(item)}
+                        styles={{ root: { height: 24, width: 24, marginRight: 4 } }}
+                    />
+                )}
+                {item.isLoading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontStyle: 'italic', color: '#605e5c' }}>
+                        <Spinner size={SpinnerSize.xSmall} />
+                        Loading...
+                    </div>
+                ) : (
+                    <UserPersona
+                        user={item.Member}
+                        secondaryText={depth > 0 ? 'Member' : undefined}
+                        fontSize={fontSize}
+                    />
+                )}
+            </div>
+            {isUser && depth === 0 && onRemovePermission && (
                 <IconButton
-                    iconProps={{ iconName: isExpanded ? 'ChevronDown' : 'ChevronRight' }}
-                    onClick={() => onToggle(item)}
-                    styles={{ root: { height: 24, width: 24, marginRight: 4 } }}
-                />
-            )}
-            {item.isLoading ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontStyle: 'italic', color: '#605e5c' }}>
-                    <Spinner size={SpinnerSize.xSmall} />
-                    Loading...
-                </div>
-            ) : (
-                <UserPersona
-                    user={item.Member}
-                    secondaryText={depth > 0 ? 'Member' : undefined}
-                    fontSize={fontSize}
+                    iconProps={{ iconName: 'Delete' }}
+                    title="Remove Permission"
+                    onClick={handleDelete}
+                    styles={{ root: { height: 24, width: 24, color: '#a80000' } }}
                 />
             )}
         </div>
@@ -67,7 +86,7 @@ const renderPrincipalType = (item: any, fontSize?: string) => <PrincipalTypeCell
 const renderPermissionLevel = (item: any, fontSize?: string) => <PermissionLevelCell item={item} fontSize={fontSize} />;
 
 export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (props) => {
-    const { permissions, permissionService } = props;
+    const { permissions, permissionService, onRemovePermission } = props;
     const [expandedGroups, setExpandedGroups] = React.useState<Set<number>>(new Set());
     const [groupMembers, setGroupMembers] = React.useState<{ [key: number]: IRoleAssignment[] }>({});
     const [loadingGroups, setLoadingGroups] = React.useState<Set<number>>(new Set());
@@ -140,8 +159,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             expandedGroups={expandedGroups}
             onToggle={toggleGroup}
             fontSize={props.contentFontSize}
+            onRemovePermission={onRemovePermission}
         />
-    ), [expandedGroups, toggleGroup, props.contentFontSize]);
+    ), [expandedGroups, toggleGroup, props.contentFontSize, onRemovePermission]);
 
     const columns: IColumn[] = React.useMemo(() => [
         {

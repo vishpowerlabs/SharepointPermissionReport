@@ -15,7 +15,7 @@ import { LoadingState } from './LoadingState';
 import { DeepScanDialog } from './DeepScanDialog';
 import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats } from '../models/IPermissionData';
 import { exportSitePermissions, exportListPermissions, exportDeepScanResults } from '../utils/CsvExport';
-import { Dialog, DialogType, DialogFooter } from '@fluentui/react/lib/Dialog';
+import { Dialog, DialogType, DialogFooter } from '@fluentui/react';
 import styles from './PermissionViewer.module.scss';
 
 export interface IPermissionViewerProps {
@@ -55,6 +55,16 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const [deepScanListTitle, setDeepScanListTitle] = React.useState<string>('');
     const [confirmScanList, setConfirmScanList] = React.useState<{ id: string, title: string } | null>(null);
     const [scanNoResults, setScanNoResults] = React.useState<boolean>(false);
+    const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
+    // Delete Confirmation State
+    const [deleteConfirmState, setDeleteConfirmState] = React.useState<{
+        isOpen: boolean;
+        title: string;
+        subText: string;
+        onConfirm: () => void;
+        onCancel?: () => void;
+    }>({ isOpen: false, title: '', subText: '', onConfirm: () => { } });
 
     React.useEffect(() => {
         const service = new PermissionServiceImpl(props.spHttpClient, props.webUrl);
@@ -130,9 +140,114 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         return await permissionService.getListRoleAssignments(listId, list ? list.Title : '');
     };
 
+    const handleRemoveSitePermission = (principalId: number, principalName: string) => {
+        setDeleteConfirmState({
+            isOpen: true,
+            title: `Remove Permissions?`,
+            subText: `Are you sure you want to remove permissions for ${principalName || 'this user'}? This will remove all permissions for this user on this site.`,
+            onConfirm: () => executeRemoveSitePermission(principalId),
+            onCancel: () => { /* No-op for site perms */ }
+        });
+    };
 
+    const executeRemoveSitePermission = async (principalId: number) => {
+        if (!permissionService) return;
+        setDeleteConfirmState(prev => ({ ...prev, isOpen: false }));
+        setIsLoading(true);
+        try {
+            const success = await permissionService.removeSitePermission(principalId);
+            if (success) {
+                const sitePerms = await permissionService.getSiteRoleAssignments();
+                setSitePermissions(sitePerms);
+                if (searchText) {
+                    const lower = searchText.toLowerCase();
+                    const filtered = sitePerms.filter(p =>
+                        p.Member.Title.toLowerCase().includes(lower) ||
+                        p.Member.Email?.toLowerCase().includes(lower)
+                    );
+                    setFilteredSitePermissions(filtered);
+                } else {
+                    setFilteredSitePermissions(sitePerms);
+                }
+            } else {
+                setErrorMessage("Failed to remove permission. Please try again or check console for details.");
+            }
+        } catch (error) {
+            console.error("Error removing site permission", error);
+            setErrorMessage("An unexpected error occurred while removing permission.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-    // ... inside component ...
+    const handleRemoveListPermission = async (listId: string, principalId: number, principalName: string): Promise<boolean> => {
+        return new Promise<boolean>((resolve) => {
+            setDeleteConfirmState({
+                isOpen: true,
+                title: `Remove Permissions?`,
+                subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this list?`,
+                onConfirm: async () => {
+                    setDeleteConfirmState(prev => ({ ...prev, isOpen: false }));
+                    if (!permissionService) { resolve(false); return; }
+                    try {
+                        const success = await permissionService.removeListPermission(listId, principalId);
+                        if (!success) {
+                            setErrorMessage("Failed to remove list permission. Please try again or check console for details.");
+                        }
+                        resolve(success);
+                    } catch (error) {
+                        console.error("Error removing list permission", error);
+                        setErrorMessage("An unexpected error occurred while removing list permission.");
+                        resolve(false);
+                    }
+                },
+                onCancel: () => {
+                    resolve(false);
+                }
+            });
+        });
+    };
+
+    const handleRemoveDeepScanItemPermission = (itemId: number, principalId: number, principalName: string) => {
+        setDeleteConfirmState({
+            isOpen: true,
+            title: `Remove Permissions?`,
+            subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this item?`,
+            onConfirm: () => executeRemoveDeepScanItemPermission(itemId, principalId),
+            onCancel: () => { /* No-op */ }
+        });
+    };
+
+    const executeRemoveDeepScanItemPermission = async (itemId: number, principalId: number) => {
+        if (!permissionService || !deepScanListTitle) return;
+        setDeleteConfirmState(prev => ({ ...prev, isOpen: false }));
+
+        const list = lists.find(l => l.Title === deepScanListTitle);
+        if (!list) return;
+
+        try {
+            const success = await permissionService.removeItemPermission(list.Id, itemId, principalId);
+            if (success) {
+                setDeepScanItems(prevItems => {
+                    return prevItems.map(item => {
+                        if (item.Id === itemId) {
+                            const newRoles = item.RoleAssignments.filter(ra => ra.PrincipalId !== principalId);
+                            if (newRoles.length === 0) {
+                                return { ...item, RoleAssignments: [] };
+                            }
+                            return { ...item, RoleAssignments: newRoles };
+                        }
+                        return item;
+                    }).filter(item => item !== null) as IItemPermission[];
+                });
+            } else {
+                setErrorMessage("Failed to remove item permission.");
+            }
+        } catch (error) {
+            console.error("Error removing item permission", error);
+            setErrorMessage("An unexpected error occurred while removing item permission.");
+        }
+    };
 
     const handleExport = async () => {
         if (!permissionService) return;
@@ -151,6 +266,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             setIsExporting(false);
         }
     };
+
 
     // ...
 
@@ -269,6 +385,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                             permissions={filteredSitePermissions}
                             permissionService={permissionService}
                             contentFontSize={props.contentFontSize}
+                            onRemovePermission={handleRemoveSitePermission}
                         />
                     )}
 
@@ -280,6 +397,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                             themeVariant={props.themeVariant}
                             buttonFontSize={props.buttonFontSize}
                             contentFontSize={props.contentFontSize}
+                            onRemovePermission={handleRemoveListPermission}
                         />
                     )}
                 </div>
@@ -293,6 +411,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                 onDownload={downloadDeepScanResults}
                 buttonFontSize={props.buttonFontSize}
                 contentFontSize={props.contentFontSize}
+                onRemovePermission={handleRemoveDeepScanItemPermission}
             />
 
             <Dialog
@@ -339,6 +458,52 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         )}
                     </DialogFooter>
                 )}
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                hidden={!deleteConfirmState.isOpen}
+                onDismiss={() => setDeleteConfirmState(prev => ({ ...prev, isOpen: false }))}
+                dialogContentProps={{
+                    type: DialogType.normal,
+                    title: deleteConfirmState.title,
+                    subText: deleteConfirmState.subText,
+                }}
+                modalProps={{
+                    isBlocking: true,
+                    styles: { main: { maxWidth: 450 } }
+                }}
+            >
+                <DialogFooter>
+                    <PrimaryButton
+                        onClick={deleteConfirmState.onConfirm}
+                        text="Remove"
+                        styles={{
+                            root: { background: '#d13438', border: '1px solid #d13438' }, // Red color for danger
+                            rootHovered: { background: '#a4262c' },
+                            label: { fontWeight: 600 }
+                        }}
+                    />
+                    <DefaultButton
+                        onClick={() => setDeleteConfirmState(prev => ({ ...prev, isOpen: false }))}
+                        text="Cancel"
+                    />
+                </DialogFooter>
+            </Dialog>
+
+            {/* Error Dialog */}
+            <Dialog
+                hidden={!errorMessage}
+                onDismiss={() => setErrorMessage(null)}
+                dialogContentProps={{
+                    type: DialogType.normal,
+                    title: 'Error',
+                    subText: errorMessage || 'An unexpected error occurred.'
+                }}
+            >
+                <DialogFooter>
+                    <PrimaryButton onClick={() => setErrorMessage(null)} text="OK" />
+                </DialogFooter>
             </Dialog>
         </div>
     );

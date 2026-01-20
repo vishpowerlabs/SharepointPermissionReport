@@ -8,13 +8,14 @@ export interface IListPermissionsProps {
     getListPermissions: (listId: string) => Promise<IRoleAssignment[]>;
     onScanItems: (listId: string) => void;
     themeVariant: IReadonlyTheme | undefined;
+    onRemovePermission?: (listId: string, principalId: number, principalName: string) => Promise<boolean>;
 
     buttonFontSize?: string;
     contentFontSize?: string;
 }
 
 export const ListPermissions: React.FunctionComponent<IListPermissionsProps> = (props) => {
-    const { lists, getListPermissions } = props;
+    const { lists, getListPermissions, onRemovePermission } = props;
     const [expandedList, setExpandedList] = React.useState<string | null>(null);
     const [permissionsMap, setPermissionsMap] = React.useState<{ [key: string]: IRoleAssignment[] }>({});
     const [loadingMap, setLoadingMap] = React.useState<{ [key: string]: boolean }>({});
@@ -38,6 +39,18 @@ export const ListPermissions: React.FunctionComponent<IListPermissionsProps> = (
         }
     };
 
+    const handleRemove = async (listId: string, principalId: number, principalName: string) => {
+        if (!onRemovePermission) return;
+        const success = await onRemovePermission(listId, principalId, principalName);
+        if (success) {
+            // Refresh permissions for this list
+            setLoadingMap(prev => ({ ...prev, [listId]: true }));
+            const perms = await getListPermissions(listId);
+            setPermissionsMap(prev => ({ ...prev, [listId]: perms }));
+            setLoadingMap(prev => ({ ...prev, [listId]: false }));
+        }
+    };
+
     return (
         <div>
             {lists.map(list => (
@@ -49,6 +62,7 @@ export const ListPermissions: React.FunctionComponent<IListPermissionsProps> = (
                     isExpanded={expandedList === list.Id}
                     onExpand={() => handleExpand(list.Id)}
                     onScanItems={() => props.onScanItems(list.Id)}
+                    onRemovePermission={onRemovePermission ? (pid, pname) => handleRemove(list.Id, pid, pname) : undefined}
                     themeVariant={props.themeVariant}
                     buttonFontSize={props.buttonFontSize}
                     contentFontSize={props.contentFontSize}

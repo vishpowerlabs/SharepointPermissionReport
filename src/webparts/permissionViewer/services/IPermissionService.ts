@@ -7,4 +7,7 @@ export interface IPermissionService {
     getSiteStats(): Promise<ISiteStats>;
     getGroupMembers(groupId: number): Promise<IUser[]>;
     getUniquePermissionItems(listId: string): Promise<IItemPermission[]>;
+    removeSitePermission(principalId: number): Promise<boolean>;
+    removeListPermission(listId: string, principalId: number): Promise<boolean>;
+    removeItemPermission(listId: string, itemId: number, principalId: number): Promise<boolean>;
 }

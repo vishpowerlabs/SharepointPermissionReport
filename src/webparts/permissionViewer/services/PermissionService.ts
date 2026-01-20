@@ -202,6 +202,42 @@ export class PermissionServiceImpl implements IPermissionService {
         }
         return results;
     }
+    public async removeSitePermission(principalId: number): Promise<boolean> {
+        const endpoint = `${this._webUrl}/_api/web/roleassignments/getbyprincipalid(${principalId})`;
+        return this._removeRoleAssignment(endpoint);
+    }
+
+    public async removeListPermission(listId: string, principalId: number): Promise<boolean> {
+        const endpoint = `${this._webUrl}/_api/web/lists(guid'${listId}')/roleassignments/getbyprincipalid(${principalId})`;
+        return this._removeRoleAssignment(endpoint);
+    }
+
+    public async removeItemPermission(listId: string, itemId: number, principalId: number): Promise<boolean> {
+        const endpoint = `${this._webUrl}/_api/web/lists(guid'${listId}')/items(${itemId})/roleassignments/getbyprincipalid(${principalId})`;
+        return this._removeRoleAssignment(endpoint);
+    }
+
+    private async _removeRoleAssignment(endpoint: string): Promise<boolean> {
+        try {
+            const response: SPHttpClientResponse = await this._spHttpClient.post(
+                endpoint,
+                SPHttpClient.configurations.v1,
+                {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-HTTP-Method': 'DELETE',
+                        'IF-MATCH': '*'
+                    }
+                }
+            );
+            return response.ok;
+        } catch (error) {
+            console.error("Error removing permission", error);
+            return false;
+        }
+    }
+
     private _processRoleAssignments(assignments: IRoleAssignment[]): IRoleAssignment[] {
         if (!assignments) return [];
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Dialog, DialogType, DialogFooter } from '@fluentui/react/lib/Dialog';
-import { PrimaryButton, DefaultButton } from '@fluentui/react/lib/Button';
+import { PrimaryButton, DefaultButton, IconButton } from '@fluentui/react/lib/Button';
 import { DetailsList, IColumn, SelectionMode, DetailsListLayoutMode } from '@fluentui/react/lib/DetailsList';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { IItemPermission } from '../models/IPermissionData';
@@ -16,6 +16,7 @@ export interface IDeepScanDialogProps {
     onDownload: () => void;
     buttonFontSize?: string;
     contentFontSize?: string;
+    onRemovePermission?: (itemId: number, principalId: number, principalName: string) => void;
 }
 
 const renderTypeColumn = (item: IItemPermission) => (
@@ -28,18 +29,36 @@ const renderNameColumn = (item: IItemPermission) => <span title={item.Title}>{it
 
 const renderPathColumn = (item: IItemPermission) => <span title={item.ServerRelativeUrl}>{item.ServerRelativeUrl}</span>;
 
-const renderUserColumn = (item: IItemPermission) => (
+const renderUserColumn = (item: IItemPermission, onRemovePermission?: (itemId: number, principalId: number, principalName: string) => void) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {item.RoleAssignments.map((ra) => (
-            <UserPersona key={ra.PrincipalId} user={ra.Member} />
-        ))}
+        {item.RoleAssignments.map((ra) => {
+            const isUser = ra.Member.PrincipalType === 1;
+            const handleDelete = () => {
+                if (onRemovePermission) {
+                    onRemovePermission(item.Id, ra.PrincipalId, ra.Member.Title);
+                }
+            };
+            return (
+                <div key={ra.PrincipalId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <UserPersona user={ra.Member} />
+                    {isUser && onRemovePermission && (
+                        <IconButton
+                            iconProps={{ iconName: 'Delete' }}
+                            title="Remove Permission"
+                            onClick={handleDelete}
+                            styles={{ root: { height: 24, width: 24, color: '#a80000', fontSize: '14px', marginLeft: '8px' } }}
+                        />
+                    )}
+                </div>
+            );
+        })}
     </div>
 );
 
 const renderPermissionColumn = (item: IItemPermission) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {item.RoleAssignments.map((ra) => (
-            <div key={ra.PrincipalId} style={{ display: 'flex', gap: '4px' }}>
+            <div key={ra.PrincipalId} style={{ display: 'flex', gap: '4px', height: '32px', alignItems: 'center' }}>
                 {ra.RoleDefinitionBindings.map(r => <PermissionBadge key={r.Id} permission={r.Name} />)}
             </div>
         ))}
@@ -47,7 +66,7 @@ const renderPermissionColumn = (item: IItemPermission) => (
 );
 
 export const DeepScanDialog: React.FunctionComponent<IDeepScanDialogProps> = (props) => {
-    const { isOpen, onDismiss, listTitle, items, onDownload, buttonFontSize, contentFontSize } = props;
+    const { isOpen, onDismiss, listTitle, items, onDownload, buttonFontSize, contentFontSize, onRemovePermission } = props;
 
     const columns: IColumn[] = [
         {
@@ -79,9 +98,9 @@ export const DeepScanDialog: React.FunctionComponent<IDeepScanDialogProps> = (pr
         {
             key: 'user',
             name: 'User/Group',
-            minWidth: 150,
-            maxWidth: 200,
-            onRender: renderUserColumn
+            minWidth: 200,
+            maxWidth: 250,
+            onRender: (item) => renderUserColumn(item, onRemovePermission)
         },
         {
             key: 'roles',
