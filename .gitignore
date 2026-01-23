@@ -1,9 +1,39 @@
+# General
 .DS_Store
-node_modules
-dist
-lib
-temp
-release
-assets
 *.log
-.vscode
+npm-debug.log*
+yarn-error.log
+package-lock.json
+
+# Dependencies
+node_modules/
+
+# Build Output
+dist/
+lib/
+lib-commonjs/
+temp/
+release/
+build/
+
+# SharePoint Solution Packages
+# Exclude the debug folder containing intermediate build artifacts
+sharepoint/solution/debug/
+# Exclude the final package file
+sharepoint/solution/*.sppkg
+*.sppkg
+
+# TypeScript / SPFx Generated
+src/**/*.d.ts
+!src/**/*.d.ts
+
+# Editor / IDE / Debug Config
+.vscode/
+.idea/
+*.swp
+
+# Local Config
+config/private.json
+
+# OS Generated
+Thumbs.db

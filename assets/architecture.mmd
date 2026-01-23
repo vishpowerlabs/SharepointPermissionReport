@@ -1,0 +1,53 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'background': '#ffffff', 'primaryColor': '#ffffff', 'edgeLabelBackground':'#ffffff', 'clusterBkg':'#ffffff', 'fontFamily': 'Segoe UI, sans-serif'}}}%%
+graph LR
+    %% Define Styles
+    classDef user fill:#FFB74D,stroke:#F57C00,stroke-width:2px,color:white,rx:10,ry:10;
+    classDef spfx fill:#42A5F5,stroke:#1E88E5,stroke-width:2px,color:white,rx:5,ry:5,shadow:5px;
+    classDef cloud fill:#F5F5F5,stroke:#BDBDBD,stroke-width:2px,stroke-dasharray: 5 5,rx:10,ry:10;
+    classDef container fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,rx:10,ry:10;
+    classDef content fill:#81C784,stroke:#43A047,stroke-width:2px,color:white,rx:5,ry:5;
+    classDef security fill:#BA68C8,stroke:#8E24AA,stroke-width:2px,color:white,rx:5,ry:5;
+
+    %% Nodes
+    User(("👤 User")):::user
+    
+    subgraph Browser ["Client Browser"]
+        direction TB
+        SPFx["⚛️ SPFx Web Part"]:::spfx
+    end
+
+    subgraph SPO ["SharePoint Online"]
+        direction TB
+        API["📡 REST API"]:::spfx
+        
+        subgraph SiteContext ["Site Collection"]
+            direction TB
+            Web["🌐 Web"]:::content
+            
+            subgraph Data ["Data Objects"]
+                 direction LR
+                 Permissions["🔐 Perms"]:::security
+                 Groups["👥 Groups"]:::content
+                 Users["👤 Users"]:::content
+            end
+        end
+    end
+
+    %% Connections
+    User ==>|Interact| SPFx
+    SPFx ==>|1. Request| API
+    
+    API -.->|2. Query| Web
+    Web --- Permissions
+    Web --- Groups
+    Web --- Users
+    
+    Permissions -.->|3. Return| API
+    API ==>|4. Response| SPFx
+
+    %% Styling Subgraphs
+    style Browser fill:#FFF3E0,stroke:#FFB74D,stroke-width:2px
+    style SPO fill:#E3F2FD,stroke:#0277BD,stroke-width:2px
+    style SiteContext fill:#FFFFFF,stroke:#B0BEC5,stroke-width:1px
+    style Data fill:#FFFFFF,stroke:none
+
