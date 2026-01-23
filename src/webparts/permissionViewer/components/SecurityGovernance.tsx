@@ -171,7 +171,7 @@ export const SecurityGovernance: React.FunctionComponent<ISecurityGovernanceProp
                                         if (activeCard.id === 'links') {
                                             const link = item as ISharingInfo;
                                             return (
-                                                <tr key={idx}>
+                                                <tr key={`${link.documentUrl}-${link.linkType}-${link.sharedWith.join('')}`}>
                                                     <td>
                                                         <a href={link.documentUrl} target="_blank" data-interception="off" rel="noopener noreferrer">
                                                             {link.documentName}

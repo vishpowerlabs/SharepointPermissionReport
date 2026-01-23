@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { SearchBox, PrimaryButton, Spinner, SpinnerSize, Persona, PersonaSize, PersonaPresence, Stack, List } from '@fluentui/react';
 import { IPermissionService } from '../services/IPermissionService';
-import { IUser, IRoleAssignment, IListInfo, IGroup } from '../models/IPermissionData';
+import { IUser, IRoleAssignment, IListInfo, IGroup, IItemPermission } from '../models/IPermissionData';
 import styles from './PermissionViewer.module.scss';
 
 export interface ICheckAccessProps {
@@ -17,6 +17,72 @@ interface IUserReport {
     groupSitePermissions: { group: string; role: string }[];
     listPermissions: { listTitle: string; role: string; type: string }[]; // Type: Direct or Group (if we scan deep)
 }
+
+// Helper for robust user matching
+const isUserMatch = (user1: IUser, user2: IUser): boolean => {
+    if (!user1 || !user2) return false;
+    // 1. ID Match (if valid positive ID)
+    if (user1.Id > 0 && user2.Id > 0 && user1.Id === user2.Id) return true;
+    // 2. LoginName Match
+    if (user1.LoginName && user2.LoginName &&
+        user1.LoginName.toLowerCase() === user2.LoginName.toLowerCase()) return true;
+    // 3. Email Match
+    if (user1.Email && user2.Email &&
+        user1.Email.toLowerCase() === user2.Email.toLowerCase()) return true;
+    return false;
+};
+
+const processListPermissions = (
+    list: IListInfo,
+    perms: IRoleAssignment[],
+    userGroupIds: Set<number>,
+    selectedUser: IUser,
+    results: { listName: string, role: string, type: string }[]
+) => {
+    if (!selectedUser) return;
+    perms.forEach(p => {
+        const isDirect = isUserMatch(p.Member, selectedUser);
+        const isGroup = userGroupIds.has(p.Member.Id);
+
+        if (isDirect || isGroup) {
+            p.RoleDefinitionBindings.forEach(r => {
+                results.push({
+                    listName: list.Title,
+                    role: r.Name,
+                    type: isDirect ? 'Direct' : `Group (${p.Member.Title})`
+                });
+            });
+        }
+    });
+};
+
+const processItemPermissions = (
+    list: IListInfo,
+    items: IItemPermission[],
+    userGroupIds: Set<number>,
+    selectedUser: IUser,
+    results: { listName: string, role: string, type: string }[]
+) => {
+    if (!selectedUser) return;
+
+    // Use flatMap/filter chain to reduce nesting depth
+    items.forEach(item => {
+        item.RoleAssignments.forEach(ra => {
+            const isDirect = isUserMatch(ra.Member, selectedUser);
+            const isGroup = userGroupIds.has(ra.Member.Id);
+
+            if (isDirect || isGroup) {
+                ra.RoleDefinitionBindings.forEach(r => {
+                    results.push({
+                        listName: `${list.Title} > ${item.Title}`,
+                        role: r.Name,
+                        type: isDirect ? 'Direct (Item)' : `Group (Item) (${ra.Member.Title})`
+                    });
+                });
+            }
+        });
+    });
+};
 
 export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) => {
     const { permissionService, sitePermissions = [], lists = [], contentFontSize } = props;
@@ -59,23 +125,7 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
         }
     };
 
-    // Helper for robust user matching
-    const isUserMatch = (user1: IUser, user2: IUser): boolean => {
-        if (!user1 || !user2) return false;
-
-        // 1. ID Match (if valid positive ID)
-        if (user1.Id > 0 && user2.Id > 0 && user1.Id === user2.Id) return true;
-
-        // 2. LoginName Match
-        if (user1.LoginName && user2.LoginName &&
-            user1.LoginName.toLowerCase() === user2.LoginName.toLowerCase()) return true;
-
-        // 3. Email Match
-        if (user1.Email && user2.Email &&
-            user1.Email.toLowerCase() === user2.Email.toLowerCase()) return true;
-
-        return false;
-    };
+    // Helper for robust user matching (Moved outside)
 
     const selectUser = async (user: IUser) => {
         setSelectedUser(user);
@@ -121,6 +171,8 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
         return { direct, groups };
     };
 
+    // Process List and Item functions moved outside for cleanliness
+
     const runScan = async () => {
         if (!selectedUser) return;
         setIsScanning(true);
@@ -135,41 +187,11 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
             try {
                 // 1. Check List Permissions
                 const perms = await permissionService.getListRoleAssignments(list.Id, list.Title);
-
-                perms.forEach(p => {
-                    const isDirect = isUserMatch(p.Member, selectedUser);
-                    const isGroup = userGroupIds.has(p.Member.Id);
-
-                    if (isDirect || isGroup) {
-                        p.RoleDefinitionBindings.forEach(r => {
-                            results.push({
-                                listName: list.Title,
-                                role: r.Name,
-                                type: isDirect ? 'Direct' : `Group (${p.Member.Title})`
-                            });
-                        });
-                    }
-                });
+                processListPermissions(list, perms, userGroupIds, selectedUser, results);
 
                 // 2. Check Item Permissions (Deep Scan)
                 const items = await permissionService.getUniquePermissionItems(list.Id);
-
-                items.forEach(item => {
-                    item.RoleAssignments.forEach(ra => {
-                        const isDirect = isUserMatch(ra.Member, selectedUser);
-                        const isGroup = userGroupIds.has(ra.Member.Id);
-
-                        if (isDirect || isGroup) {
-                            ra.RoleDefinitionBindings.forEach(r => {
-                                results.push({
-                                    listName: `${list.Title} > ${item.Title}`,
-                                    role: r.Name,
-                                    type: isDirect ? 'Direct (Item)' : `Group (Item) (${ra.Member.Title})`
-                                });
-                            });
-                        }
-                    });
-                });
+                processItemPermissions(list, items, userGroupIds, selectedUser, results);
 
             } catch (e) {
                 console.error(`Error scanning list ${list.Title}`, e);
@@ -185,8 +207,16 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
     // Use empty object if styles is undefined
     const safeStyles = styles || {};
 
+    const renderUserCell = (item?: IUser): JSX.Element => (
+        <UserResultItem
+            item={item}
+            onClick={() => item && selectUser(item)}
+            className={safeStyles.userResultItem}
+        />
+    );
+
     return (
-        <div className={safeStyles.checkAccessContainer || ''} style={{ padding: '20px' }}>
+        <div className={safeStyles.checkAccessContainer || ''} style={{ padding: '20px', fontSize: contentFontSize }}>
             <Stack tokens={{ childrenGap: 20 }}>
                 {/* Search Header */}
                 <Stack>
@@ -202,15 +232,7 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
                         <div style={{ border: '1px solid #edebe9', maxHeight: '200px', overflowY: 'auto' }}>
                             <List
                                 items={searchResults}
-                                onRenderCell={(item) => (
-                                    <div
-                                        className={safeStyles.userResultItem || ''}
-                                        onClick={() => selectUser(item!)}
-                                        style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #f3f2f1', display: 'flex', alignItems: 'center', gap: '10px' }}
-                                    >
-                                        <Persona text={item?.Title} secondaryText={item?.Email} size={PersonaSize.size24} />
-                                    </div>
-                                )}
+                                onRenderCell={renderUserCell}
                             />
                         </div>
                     )}
@@ -242,11 +264,11 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
                                 <div>No direct permissions found on the root site.</div>
                             ) : (
                                 <ul>
-                                    {siteAccess.direct.map((r, i) => (
-                                        <li key={`d-${i}`}><strong>{r}</strong> (Direct)</li>
+                                    {siteAccess.direct.map((r) => (
+                                        <li key={`d-${r}`}><strong>{r}</strong> (Direct)</li>
                                     ))}
-                                    {siteAccess.groups.map((g, i) => (
-                                        <li key={`g-${i}`}><strong>{g.role}</strong> (via {g.group})</li>
+                                    {siteAccess.groups.map((g) => (
+                                        <li key={`g-${g.group}-${g.role}`}><strong>{g.role}</strong> (via {g.group})</li>
                                     ))}
                                 </ul>
                             )}
@@ -279,7 +301,7 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
                                     </thead>
                                     <tbody>
                                         {scanResults.map((res, idx) => (
-                                            <tr key={idx} style={{ borderBottom: '1px solid #edebe9' }}>
+                                            <tr key={`${res.listName}-${res.role}-${idx}`} style={{ borderBottom: '1px solid #edebe9' }}>
                                                 <td style={{ padding: '8px' }}>{res.listName}</td>
                                                 <td style={{ padding: '8px' }}>{res.role}</td>
                                                 <td style={{ padding: '8px' }}>{res.type}</td>
@@ -305,5 +327,38 @@ export const CheckAccess: React.FunctionComponent<ICheckAccessProps> = (props) =
                 )}
             </Stack>
         </div>
+    );
+};
+
+// Extracted Component to enable proper interactivity and avoid nesting
+const UserResultItem: React.FunctionComponent<{
+    item?: IUser,
+    onClick: () => void,
+    className?: string
+}> = ({ item, onClick, className }) => {
+    if (!item) return null;
+
+
+
+    return (
+        <button
+            type="button"
+            className={className || ''}
+            onClick={onClick}
+            style={{
+                padding: '10px',
+                cursor: 'pointer',
+                borderBottom: '1px solid #f3f2f1',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                textAlign: 'left'
+            }}
+        >
+            <Persona text={item.Title} secondaryText={item.Email} size={PersonaSize.size24} />
+        </button>
     );
 };

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { DetailsList, IColumn, SelectionMode } from '@fluentui/react/lib/DetailsList';
+import { Link } from '@fluentui/react/lib/Link';
 import { Panel, PanelType } from '@fluentui/react/lib/Panel';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import { MessageBar, MessageBarType } from '@fluentui/react/lib/MessageBar';
@@ -18,6 +19,19 @@ export interface ISiteGroupsProps {
     permissionService: IPermissionService;
     contentFontSize?: string;
 }
+
+const GroupNameCell: React.FC<{ item: IGroup; fontSize?: string; onClick: (g: IGroup) => void }> = ({ item, fontSize, onClick }) => (
+    <Link
+        onClick={() => onClick(item)}
+        style={{ fontSize, fontWeight: 600 }}
+    >
+        {item.Title}
+    </Link>
+);
+
+const TextCell: React.FC<{ text: string; fontSize?: string }> = ({ text, fontSize }) => (
+    <span style={{ fontSize }}>{text}</span>
+);
 
 export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => {
     const [filteredGroups, setFilteredGroups] = React.useState<IGroup[]>([]);
@@ -46,7 +60,7 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         const lowerQuery = newValue.toLowerCase();
         const filtered = props.groups.filter(g =>
             g.Title.toLowerCase().includes(lowerQuery) ||
-            (g.Description && g.Description.toLowerCase().includes(lowerQuery))
+            (g.Description?.toLowerCase().includes(lowerQuery))
         );
         setFilteredGroups(filtered);
     };
@@ -97,7 +111,23 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         }
     };
 
-    const columns: IColumn[] = [
+    const onRenderGroupName = React.useCallback((item: IGroup) => (
+        <GroupNameCell
+            item={item}
+            fontSize={props.contentFontSize}
+            onClick={onGroupClick}
+        />
+    ), [props.contentFontSize, onGroupClick]);
+
+    const onRenderDescription = React.useCallback((item: IGroup) => (
+        <TextCell text={item.Description} fontSize={props.contentFontSize} />
+    ), [props.contentFontSize]);
+
+    const onRenderOwner = React.useCallback((item: IGroup) => (
+        <TextCell text={item.OwnerTitle} fontSize={props.contentFontSize} />
+    ), [props.contentFontSize]);
+
+    const columns: IColumn[] = React.useMemo(() => [
         {
             key: 'Title',
             name: 'Group Name',
@@ -105,14 +135,7 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
             minWidth: 150,
             maxWidth: 250,
             isResizable: true,
-            onRender: (item: IGroup) => (
-                <span
-                    style={{ fontSize: props.contentFontSize, fontWeight: 600, color: '#0078d4', cursor: 'pointer' }}
-                    onClick={() => onGroupClick(item)}
-                >
-                    {item.Title}
-                </span>
-            )
+            onRender: onRenderGroupName
         },
         {
             key: 'Description',
@@ -121,7 +144,7 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
             minWidth: 200,
             maxWidth: 400,
             isResizable: true,
-            onRender: (item: IGroup) => <span style={{ fontSize: props.contentFontSize }}>{item.Description}</span>
+            onRender: onRenderDescription
         },
         {
             key: 'Owner',
@@ -129,9 +152,9 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
             fieldName: 'OwnerTitle', // Map to OwnerTitle if available, logic might need check in Service
             minWidth: 100,
             isResizable: true,
-            onRender: (item: IGroup) => <span style={{ fontSize: props.contentFontSize }}>{item.OwnerTitle}</span>
+            onRender: onRenderOwner
         }
-    ];
+    ], [onRenderGroupName, onRenderDescription, onRenderOwner]);
 
     return (
         <div>

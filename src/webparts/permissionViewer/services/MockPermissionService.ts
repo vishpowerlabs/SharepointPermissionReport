@@ -152,7 +152,7 @@ export class MockPermissionService implements IPermissionService {
 
     public async getOrphanedUsers(): Promise<IUser[]> {
         return [
-            { Id: 401, Title: "Orphaned User", Email: "", LoginName: "i:0#.w|domain\\orphaned", PrincipalType: 1, IsHiddenInUI: false }
+            { Id: 401, Title: "Orphaned User", Email: "", LoginName: String.raw`i:0#.w|domain\orphaned`, PrincipalType: 1, IsHiddenInUI: false }
         ];
     }
 }

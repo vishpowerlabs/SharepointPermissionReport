@@ -390,7 +390,7 @@ export class PermissionServiceImpl implements IPermissionService {
                 // Let's rely on what we get. If EntityData.SPUserID is present, use it.
                 // If not, use -1 or similar to indicate "Not in site".
 
-                const userId = item.EntityData && item.EntityData.SPUserID ? parseInt(item.EntityData.SPUserID, 10) : -1;
+                const userId = item.EntityData?.SPUserID ? Number.parseInt(item.EntityData.SPUserID, 10) : -1;
 
                 return {
                     Id: userId,
@@ -528,8 +528,8 @@ export class PermissionServiceImpl implements IPermissionService {
             const allUsers = await this._getAllSiteUsers();
             // Filter for #ext# in LoginName or Email
             return allUsers.filter(u =>
-                (u.LoginName && u.LoginName.toLowerCase().indexOf('#ext#') !== -1) ||
-                (u.Email && u.Email.toLowerCase().indexOf('#ext#') !== -1)
+                (u.LoginName?.toLowerCase().includes('#ext#')) ||
+                (u.Email?.toLowerCase().includes('#ext#'))
             );
         } catch (error) {
             console.error("Error fetching external users", error);
@@ -568,7 +568,7 @@ export class PermissionServiceImpl implements IPermissionService {
                     // But _webUrl might be https://tenant.sharepoint.com/sites/mysite
                     // We need the domain.
 
-                    const location = window.location;
+                    const location = globalThis.location;
                     const domain = `${location.protocol}//${location.hostname}`;
                     const objectUrl = `${domain}${item.FileRef}`;
 
@@ -613,7 +613,7 @@ export class PermissionServiceImpl implements IPermissionService {
 
                         // Extract specific sharing links?
                         // "SharingLinks" property contains list of links
-                        if (data.SharingLinks && data.SharingLinks.results) {
+                        if (data.SharingLinks?.results) {
                             data.SharingLinks.results.forEach((link: any) => {
                                 // link.Url, link.IsActive, link.LinkKind
                                 // LinkKind: 1=Organization, 2=Anonymous?, 3=SpecificPeople?
@@ -660,15 +660,15 @@ export class PermissionServiceImpl implements IPermissionService {
         try {
             const allUsers = await this._getAllSiteUsers();
             // Simple heuristic: Users with no email, not system, not sharing links, not admin
-            const systemUsers = ['System Account', 'SharePoint App', 'NT AUTHORITY\\authenticated users', 'spsearch'];
+            const systemUsers = new Set(['System Account', 'SharePoint App', String.raw`NT AUTHORITY\authenticated users`, 'spsearch']);
 
             return allUsers.filter(u =>
                 !u.Email &&
                 u.PrincipalType === 1 &&
                 !u.IsSiteAdmin &&
-                !systemUsers.includes(u.Title) &&
-                u.Title.indexOf('SharingLinks') === -1 &&
-                (!u.LoginName || u.LoginName.indexOf('nt service') === -1)
+                !systemUsers.has(u.Title) &&
+                !u.Title.includes('SharingLinks') &&
+                !u.LoginName?.includes('nt service')
             );
         } catch (error) {
             console.error("Error fetching orphaned users", error);
@@ -687,7 +687,7 @@ export class PermissionServiceImpl implements IPermissionService {
                     const errorText = await response.text();
                     console.error("Error details:", errorText);
                 } catch (e) {
-                    console.error("Could not read error details");
+                    console.error("Could not read error details", e);
                 }
                 return [];
             }

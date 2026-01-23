@@ -19,7 +19,7 @@ import { SiteGroups } from './SiteGroups';
 import { SecurityGovernance } from './SecurityGovernance';
 import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup } from '../models/IPermissionData';
 import { exportSitePermissions, exportListPermissions, exportDeepScanResults } from '../utils/CsvExport';
-import { Dialog, DialogType, DialogFooter } from '@fluentui/react';
+import { Dialog, DialogType, DialogFooter, MessageBar, MessageBarType } from '@fluentui/react';
 import styles from './PermissionViewer.module.scss';
 
 export interface IPermissionViewerProps {
@@ -131,6 +131,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
             if (isAllowed) {
                 setHasAccess(true);
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises
                 loadData(service);
             } else {
                 // Access Denied: Load Admins and Owners for contact info
@@ -230,6 +231,13 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         setIsLoading(false);
     };
 
+    const handleRefresh = () => {
+        if (permissionService) {
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            loadData(permissionService);
+        }
+    };
+
     // ... (existing handlers)
 
     if (hasAccess === false) {
@@ -237,7 +245,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             <div className={styles.permissionViewer}>
                 <div className={styles.webpartContainer}>
                     <Header
-                        onRefresh={() => checkAccessAndLoad(permissionService!)}
+                        onRefresh={handleRefresh}
                         isLoading={isLoading}
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity ?? 100}
@@ -256,11 +264,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     }
 
 
-    const handleRefresh = () => {
-        if (permissionService) {
-            loadData(permissionService);
-        }
-    };
+
 
     /* onSearch removed as unused */
 
@@ -276,7 +280,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             isOpen: true,
             title: `Remove Permissions?`,
             subText: `Are you sure you want to remove permissions for ${principalName || 'this user'}? This will remove all permissions for this user on this site.`,
-            onConfirm: () => executeRemoveSitePermission(principalId),
+            onConfirm: () => { void executeRemoveSitePermission(principalId); },
             onCancel: () => { /* No-op for site perms */ }
         });
     };
@@ -302,27 +306,29 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         }
     };
 
-    const handleRemoveListPermission = async (listId: string, principalId: number, principalName: string): Promise<boolean> => {
+    const executeRemoveListPermission = async (listId: string, principalId: number, resolve: (value: boolean | PromiseLike<boolean>) => void) => {
+        setDeleteConfirmState(prev => ({ ...prev, isOpen: false }));
+        if (!permissionService) { resolve(false); return; }
+        try {
+            const success = await permissionService.removeListPermission(listId, principalId);
+            if (!success) {
+                setErrorMessage("Failed to remove list permission. Please try again or check console for details.");
+            }
+            resolve(success);
+        } catch (error) {
+            console.error("Error removing list permission", error);
+            setErrorMessage("An unexpected error occurred while removing list permission.");
+            resolve(false);
+        }
+    };
+
+    const handleRemoveListPermission = (listId: string, principalId: number, principalName: string): Promise<boolean> => {
         return new Promise<boolean>((resolve) => {
             setDeleteConfirmState({
                 isOpen: true,
                 title: `Remove Permissions?`,
                 subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this list?`,
-                onConfirm: async () => {
-                    setDeleteConfirmState(prev => ({ ...prev, isOpen: false }));
-                    if (!permissionService) { resolve(false); return; }
-                    try {
-                        const success = await permissionService.removeListPermission(listId, principalId);
-                        if (!success) {
-                            setErrorMessage("Failed to remove list permission. Please try again or check console for details.");
-                        }
-                        resolve(success);
-                    } catch (error) {
-                        console.error("Error removing list permission", error);
-                        setErrorMessage("An unexpected error occurred while removing list permission.");
-                        resolve(false);
-                    }
-                },
+                onConfirm: () => { void executeRemoveListPermission(listId, principalId, resolve); },
                 onCancel: () => {
                     resolve(false);
                 }
@@ -335,9 +341,17 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             isOpen: true,
             title: `Remove Permissions?`,
             subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this item?`,
-            onConfirm: () => executeRemoveDeepScanItemPermission(itemId, principalId),
+            onConfirm: () => { void executeRemoveDeepScanItemPermission(itemId, principalId); },
             onCancel: () => { /* No-op */ }
         });
+    };
+
+    const updateDeepScanItemsAfterRemoval = (itemId: number, principalId: number) => {
+        setDeepScanItems(prevItems => prevItems.map(item => {
+            if (item.Id !== itemId) return item;
+            const newRoles = item.RoleAssignments.filter(ra => ra.PrincipalId !== principalId);
+            return { ...item, RoleAssignments: newRoles };
+        }));
     };
 
     const executeRemoveDeepScanItemPermission = async (itemId: number, principalId: number) => {
@@ -350,18 +364,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         try {
             const success = await permissionService.removeItemPermission(list.Id, itemId, principalId);
             if (success) {
-                setDeepScanItems(prevItems => {
-                    return prevItems.map(item => {
-                        if (item.Id === itemId) {
-                            const newRoles = item.RoleAssignments.filter(ra => ra.PrincipalId !== principalId);
-                            if (newRoles.length === 0) {
-                                return { ...item, RoleAssignments: [] };
-                            }
-                            return { ...item, RoleAssignments: newRoles };
-                        }
-                        return item;
-                    }).filter(item => item !== null) as IItemPermission[];
-                });
+                updateDeepScanItemsAfterRemoval(itemId, principalId);
             } else {
                 setErrorMessage("Failed to remove item permission.");
             }
@@ -376,7 +379,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             isOpen: true,
             title: `Remove from Group?`,
             subText: `Are you sure you want to remove '${userName}' from this group?`,
-            onConfirm: () => executeRemoveFromGroup(groupId, userId),
+            onConfirm: () => { void executeRemoveFromGroup(groupId, userId); },
             onCancel: () => { /* No-op */ }
         });
     };
@@ -545,7 +548,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity}
                         isLoading={isLoading}
-                        onRefresh={() => checkAccessAndLoad(permissionService!)}
+                        onRefresh={handleRefresh}
 
                     />
                 )}
@@ -575,7 +578,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                 <DefaultButton
                                     text={isExporting ? "Exporting..." : "Export to CSV"}
                                     iconProps={{ iconName: 'Download' }}
-                                    onClick={handleExport}
+                                    onClick={() => { void handleExport(); }}
                                     disabled={isExporting || isLoading}
                                     className={styles.exportBtn}
                                     styles={{
@@ -585,6 +588,18 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                 />
                             )}
                         </div>
+
+                        {errorMessage && (
+                            <MessageBar
+                                messageBarType={MessageBarType.error}
+                                isMultiline={false}
+                                onDismiss={() => setErrorMessage(null)}
+                                dismissButtonAriaLabel="Close"
+                                styles={{ root: { marginBottom: 10 } }}
+                            >
+                                {errorMessage}
+                            </MessageBar>
+                        )}
 
                         <div className={styles.content}>
                             {isLoading && <LoadingState message={loadingMessage} />}
