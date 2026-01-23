@@ -1,0 +1,128 @@
+import { IPermissionService } from './IPermissionService';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup } from '../models/IPermissionData';
+
+export class MockPermissionService implements IPermissionService {
+
+    public async getSiteRoleAssignments(): Promise<IRoleAssignment[]> {
+        return [
+            {
+                Member: { Id: 1, Title: "Marketing Owners", LoginName: "c:0+.w|s-1-5-21...", PrincipalType: 8, IsHiddenInUI: false },
+                PrincipalId: 1,
+                RoleDefinitionBindings: [{ Id: 1073741829, Name: "Full Control", Description: "Has full control.", Order: 1, Hidden: false }]
+            },
+            {
+                Member: { Id: 2, Title: "Marketing Members", LoginName: "c:0+.w|s-1-5-21...", PrincipalType: 8, IsHiddenInUI: false },
+                PrincipalId: 2,
+                RoleDefinitionBindings: [{ Id: 1073741830, Name: "Edit", Description: "Can add, edit and delete lists.", Order: 2, Hidden: false }]
+            },
+            {
+                Member: { Id: 3, Title: "Marketing Visitors", LoginName: "c:0+.w|s-1-5-21...", PrincipalType: 8, IsHiddenInUI: false },
+                PrincipalId: 3,
+                RoleDefinitionBindings: [{ Id: 1073741826, Name: "Read", Description: "Can view pages and list items.", Order: 3, Hidden: false }]
+            },
+            {
+                Member: { Id: 4, Title: "Sarah Jenkins", LoginName: "i:0#.f|membership|sarah.j@contoso.com", Email: "sarah.j@contoso.com", PrincipalType: 1, IsHiddenInUI: false },
+                PrincipalId: 4,
+                RoleDefinitionBindings: [{ Id: 1073741829, Name: "Full Control", Description: "", Order: 1, Hidden: false }]
+            }
+        ];
+    }
+
+    public async getLists(excludedLists?: string[]): Promise<IListInfo[]> {
+        return [
+            { Id: "1", Title: "Campaign Documents", ItemCount: 154, Hidden: false, ItemType: "Library", ServerRelativeUrl: "/sites/marketing/Shared Documents", HasUniqueRoleAssignments: true, EntityTypeName: "Documents" },
+            { Id: "2", Title: "Product Specifications", ItemCount: 42, Hidden: false, ItemType: "Library", ServerRelativeUrl: "/sites/marketing/ProductSpecs", HasUniqueRoleAssignments: false, EntityTypeName: "ProductSpecs" },
+            { Id: "3", Title: "Event Calendar", ItemCount: 12, Hidden: false, ItemType: "List", ServerRelativeUrl: "/sites/marketing/Lists/Events", HasUniqueRoleAssignments: true, EntityTypeName: "Events" },
+            { Id: "4", Title: "Budget Approvals", ItemCount: 8, Hidden: false, ItemType: "List", ServerRelativeUrl: "/sites/marketing/Lists/Budget", HasUniqueRoleAssignments: true, EntityTypeName: "Budget" }
+        ];
+    }
+
+    public async getListRoleAssignments(listId: string, listTitle: string): Promise<IRoleAssignment[]> {
+        return [
+            {
+                Member: { Id: 2, Title: "Marketing Members", LoginName: "c:0+.w|s-1-5-21...", PrincipalType: 8, IsHiddenInUI: false },
+                PrincipalId: 2,
+                RoleDefinitionBindings: [{ Id: 1073741830, Name: "Edit", Description: "", Order: 22, Hidden: false }]
+            },
+            {
+                Member: { Id: 5, Title: "External Auditors", LoginName: "c:0-.t|identityprovider|auditors", PrincipalType: 4, IsHiddenInUI: false },
+                PrincipalId: 5,
+                RoleDefinitionBindings: [{ Id: 1073741826, Name: "Read", Description: "", Order: 2, Hidden: false }]
+            }
+        ];
+    }
+
+    public async getSiteStats(): Promise<ISiteStats> {
+        return {
+            totalUsers: 142,
+            totalGroups: 15,
+            uniquePermissionsCount: 8
+        };
+    }
+
+    public async getSiteGroups(): Promise<IGroup[]> {
+        return [
+            { Id: 1, Title: "Marketing Owners", LoginName: "owners", Description: "Site Owners", OwnerTitle: "System Account", IsHiddenInUI: false, PrincipalType: 8 },
+            { Id: 2, Title: "Marketing Members", LoginName: "members", Description: "Site Members", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 },
+            { Id: 3, Title: "Marketing Visitors", LoginName: "visitors", Description: "Site Visitors", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 },
+            { Id: 10, Title: "Design Team", LoginName: "design", Description: "Designers and Creatives", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 },
+            { Id: 11, Title: "Security Audit Team", LoginName: "sec_audit", Description: "External Security Auditors", OwnerTitle: "Active Directory", IsHiddenInUI: false, PrincipalType: 4 }
+        ];
+    }
+
+    public async getGroupMembers(groupId: number): Promise<IUser[]> {
+        if (groupId === 1) return [{ Id: 101, Title: "Admin User", Email: "admin@contoso.com", LoginName: "admin", PrincipalType: 1, IsHiddenInUI: false }];
+        if (groupId === 2) return [
+            { Id: 102, Title: "John Doe", Email: "john.d@contoso.com", LoginName: "johnd", PrincipalType: 1, IsHiddenInUI: false },
+            { Id: 103, Title: "Jane Smith", Email: "jane.s@contoso.com", LoginName: "janes", PrincipalType: 1, IsHiddenInUI: false },
+            { Id: 104, Title: "Bob Wilson", Email: "bob.w@contoso.com", LoginName: "bobw", PrincipalType: 1, IsHiddenInUI: false }
+        ];
+        return [];
+    }
+
+    public async searchUsers(query: string): Promise<IUser[]> {
+        return [
+            { Id: 102, Title: "John Doe", Email: "john.d@contoso.com", LoginName: "johnd", PrincipalType: 1, IsHiddenInUI: false },
+            { Id: 103, Title: "Jane Smith", Email: "jane.s@contoso.com", LoginName: "janes", PrincipalType: 1, IsHiddenInUI: false }
+        ];
+    }
+
+    public async getSiteAdmins(): Promise<IUser[]> {
+        return [
+            { Id: 99, Title: "System Administrator", Email: "admin@contoso.com", LoginName: "admin", PrincipalType: 1, IsHiddenInUI: false, IsSiteAdmin: true }
+        ];
+    }
+
+    public async getSiteOwners(): Promise<IUser[]> {
+        return [
+            { Id: 99, Title: "System Administrator", Email: "admin@contoso.com", LoginName: "admin", PrincipalType: 1, IsHiddenInUI: false, IsSiteOwner: true },
+            { Id: 100, Title: "Marketing Lead", Email: "lead@contoso.com", LoginName: "lead", PrincipalType: 1, IsHiddenInUI: false, IsSiteOwner: true }
+        ];
+    }
+
+    public async getCurrentUser(): Promise<IUser> {
+        return { Id: 99, Title: "System Administrator", Email: "admin@contoso.com", LoginName: "admin", PrincipalType: 1, IsHiddenInUI: false, IsSiteAdmin: true };
+    }
+
+    public async removeSitePermission(principalId: number): Promise<boolean> { return true; }
+    public async removeListPermission(listId: string, principalId: number): Promise<boolean> { return true; }
+    public async removeItemPermission(listId: string, itemId: number, principalId: number): Promise<boolean> { return true; }
+    public async removeUserFromGroup(groupId: number, userId: number): Promise<boolean> {
+        console.log(`[Mock] Removing user ${userId} from group ${groupId}`);
+        return true;
+    }
+    public async getUniquePermissionItems(listId: string): Promise<IItemPermission[]> {
+        return [
+            { Id: 55, Title: "Confidential Strategy.docx", ServerRelativeUrl: "/sites/marketing/docs/strategy.docx", FileSystemObjectType: 1, RoleAssignments: [] }
+        ];
+    }
+    public async getUserGroups(loginName: string): Promise<IGroup[]> {
+        // Mock: John Doe is in "Marketing Members" (Id 2)
+        if (loginName === "johnd" || loginName.includes("john")) {
+            return [
+                { Id: 2, Title: "Marketing Members", LoginName: "members", Description: "Site Members", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 }
+            ];
+        }
+        return [];
+    }
+}

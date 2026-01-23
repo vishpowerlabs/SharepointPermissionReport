@@ -13,6 +13,7 @@ export interface ISitePermissionsProps {
     permissionService?: IPermissionService;
     contentFontSize?: string;
     onRemovePermission?: (principalId: number, principalName: string) => void;
+    onRemoveFromGroup?: (groupId: number, userId: number, userName: string) => void;
 }
 
 const UserGroupCell: React.FunctionComponent<{
@@ -21,15 +22,18 @@ const UserGroupCell: React.FunctionComponent<{
     onToggle: (group: IRoleAssignment) => void;
     fontSize?: string;
     onRemovePermission?: (principalId: number, principalName: string) => void;
-}> = ({ item, expandedGroups, onToggle, fontSize, onRemovePermission }) => {
-    const isGroup = item.Member.PrincipalType === 8 || item.Member.PrincipalType === 4;
+    onRemoveFromGroup?: (groupId: number, userId: number, userName: string) => void;
+}> = ({ item, expandedGroups, onToggle, fontSize, onRemovePermission, onRemoveFromGroup }) => {
+    const isGroup = item.Member.PrincipalType === 8; // Only SharePoint Groups are expandable
     const isUser = item.Member.PrincipalType === 1;
     const isExpanded = expandedGroups.has(item.Member.Id);
     const depth = item.depth || 0;
 
     const handleDelete = () => {
-        if (onRemovePermission) {
+        if (depth === 0 && onRemovePermission) {
             onRemovePermission(item.Member.Id, item.Member.Title);
+        } else if (depth > 0 && onRemoveFromGroup && item.parentGroupId) {
+            onRemoveFromGroup(item.parentGroupId, item.Member.Id, item.Member.Title);
         }
     };
 
@@ -56,14 +60,17 @@ const UserGroupCell: React.FunctionComponent<{
                     />
                 )}
             </div>
-            {isUser && depth === 0 && onRemovePermission && (
-                <IconButton
-                    iconProps={{ iconName: 'Delete' }}
-                    title="Remove Permission"
-                    onClick={handleDelete}
-                    styles={{ root: { height: 24, width: 24, color: '#a80000' } }}
-                />
-            )}
+            {(
+                (isUser && depth === 0 && onRemovePermission) ||
+                (depth > 0 && onRemoveFromGroup)
+            ) && (
+                    <IconButton
+                        iconProps={{ iconName: 'Delete' }}
+                        title={depth === 0 ? "Remove Permission" : "Remove from Group"}
+                        onClick={handleDelete}
+                        styles={{ root: { height: 24, width: 24, color: '#a80000' } }}
+                    />
+                )}
         </div>
     );
 };
@@ -90,6 +97,11 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
     const [expandedGroups, setExpandedGroups] = React.useState<Set<number>>(new Set());
     const [groupMembers, setGroupMembers] = React.useState<{ [key: number]: IRoleAssignment[] }>({});
     const [loadingGroups, setLoadingGroups] = React.useState<Set<number>>(new Set());
+
+    React.useEffect(() => {
+        setExpandedGroups(new Set());
+        setGroupMembers({});
+    }, [permissions]);
 
     const toggleGroup = async (group: IRoleAssignment) => {
         const groupId = group.Member.Id;
@@ -128,12 +140,12 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
     };
 
     const displayItems = React.useMemo(() => {
-        const items: (IRoleAssignment & { depth?: number, isLoading?: boolean })[] = [];
+        const items: (IRoleAssignment & { depth?: number, isLoading?: boolean, parentGroupId?: number })[] = [];
 
         permissions.forEach(p => {
             items.push({ ...p, depth: 0 });
             const groupId = p.Member.Id;
-            if ((p.Member.PrincipalType === 8 || p.Member.PrincipalType === 4) && expandedGroups.has(groupId)) {
+            if (p.Member.PrincipalType === 8 && expandedGroups.has(groupId)) {
                 if (loadingGroups.has(groupId)) {
                     // Placeholder for loading
                     items.push({
@@ -145,7 +157,7 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
                     } as any);
                 } else if (groupMembers[groupId]) {
                     groupMembers[groupId].forEach(m => {
-                        items.push({ ...m, depth: 1 });
+                        items.push({ ...m, depth: 1, parentGroupId: groupId });
                     });
                 }
             }
@@ -160,8 +172,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             onToggle={toggleGroup}
             fontSize={props.contentFontSize}
             onRemovePermission={onRemovePermission}
+            onRemoveFromGroup={props.onRemoveFromGroup}
         />
-    ), [expandedGroups, toggleGroup, props.contentFontSize, onRemovePermission]);
+    ), [expandedGroups, toggleGroup, props.contentFontSize, onRemovePermission, props.onRemoveFromGroup]);
 
     const columns: IColumn[] = React.useMemo(() => [
         {

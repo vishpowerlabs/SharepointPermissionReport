@@ -29,7 +29,11 @@ export interface IPermissionViewerWebPartProps {
     webPartTitle: string;
     webPartTitleFontSize: string;
     contentFontSize: string;
+    simulateAccessDenied: boolean;
+    useMockData: boolean;
 }
+
+
 
 export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPermissionViewerWebPartProps> {
 
@@ -74,7 +78,9 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                 showComponentHeader: this.properties.showComponentHeader,
                 webPartTitle: this.properties.webPartTitle,
                 webPartTitleFontSize: this.properties.webPartTitleFontSize,
-                contentFontSize: this.properties.contentFontSize || '14px'
+                contentFontSize: this.properties.contentFontSize || '14px',
+                simulateAccessDenied: this.properties.simulateAccessDenied,
+                useMockData: this.properties.useMockData
             }
         );
 
@@ -165,6 +171,16 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                                         { key: '16px', text: 'Extra Large (16px)' },
                                         { key: '18px', text: 'Huge (18px)' }
                                     ]
+                                }),
+                                PropertyPaneToggle('simulateAccessDenied', {
+                                    label: "Simulate Access Denied (For Testing)",
+                                    checked: false
+                                }),
+                                PropertyPaneToggle('useMockData', {
+                                    label: "Use Mock Data",
+                                    checked: false,
+                                    onText: "Mock",
+                                    offText: "Production"
                                 })
                             ]
                         }

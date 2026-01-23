@@ -2,8 +2,22 @@ export interface IUser {
     Id: number;
     Title: string;
     Email?: string;
+    LoginName?: string;
     IsHiddenInUI: boolean;
-    PrincipalType: number; // 1=User, 4=Security Group, 8=SharePoint Group
+    PrincipalType: number;
+    IsSiteAdmin?: boolean;
+    IsSiteOwner?: boolean;
+}
+
+export interface IGroup {
+    Id: number;
+    Title: string;
+    LoginName: string;
+    Description: string;
+    IsHiddenInUI: boolean;
+    PrincipalType?: number; // 8 for SP Group, 4 for Security Group
+    OwnerTitle: string;
+    Users?: IUser[];
 }
 
 export interface IRoleDefinition {

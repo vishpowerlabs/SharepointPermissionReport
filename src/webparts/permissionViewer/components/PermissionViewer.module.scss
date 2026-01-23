@@ -30,14 +30,14 @@
 
   .statsContainer {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 20px;
     padding: 24px 32px;
     background: "[theme: neutralLighterAlt, default: #faf9f8]";
   }
 
   .statCard {
-    background: "[theme: cardStandoutBackground, default: #ffffff]";
+    background: "[theme: themeLighter, default: #deecf9]"; // Primary with opacity (light shade)
     border-radius: 8px;
     padding: 24px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -116,6 +116,7 @@
   .content {
     padding: 10px 10px;
     background: "[theme: bodyBackground, default: #ffffff]";
+    min-height: 500px;
   }
 
   .permissionTable {
@@ -310,5 +311,57 @@
     .ms-Dialog-subText {
       color: "[theme: neutralSecondary, default: #605e5c]";
     }
+  }
+}
+
+.checkAccessContainer {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.userResultItem {
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: "[theme: neutralLight, default: #edebe9]";
+  }
+}
+
+.adminGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.adminCard {
+  background: "[theme: bodyBackground, default: #ffffff]";
+  border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+  border-radius: 8px;
+  padding: 16px;
+  flex: 1 1 280px; // Responsive width
+  max-width: 100%; // Ensure it doesn't overflow container on very small screens
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: "[theme: themePrimary, default: #0078d4]";
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+
+  .adminHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .adminDetails {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: "[theme: neutralSecondary, default: #605e5c]";
   }
 }

@@ -1,4 +1,4 @@
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup } from '../models/IPermissionData';
 
 export interface IPermissionService {
     getSiteRoleAssignments(): Promise<IRoleAssignment[]>;
@@ -10,4 +10,11 @@ export interface IPermissionService {
     removeSitePermission(principalId: number): Promise<boolean>;
     removeListPermission(listId: string, principalId: number): Promise<boolean>;
     removeItemPermission(listId: string, itemId: number, principalId: number): Promise<boolean>;
+    getSiteAdmins(): Promise<IUser[]>;
+    getSiteOwners(): Promise<IUser[]>;
+    getCurrentUser(): Promise<IUser>;
+    searchUsers(query: string): Promise<IUser[]>;
+    getSiteGroups(): Promise<IGroup[]>;
+    getUserGroups(loginName: string): Promise<IGroup[]>;
+    removeUserFromGroup(groupId: number, userId: number): Promise<boolean>;
 }

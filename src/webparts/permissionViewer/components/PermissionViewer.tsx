@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { Pivot, PivotItem } from '@fluentui/react/lib/Pivot';
-import { SearchBox } from '@fluentui/react/lib/SearchBox';
 import { DefaultButton, PrimaryButton } from '@fluentui/react/lib/Button';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
 import { PermissionServiceImpl } from '../services/PermissionService';
+import { MockPermissionService } from '../services/MockPermissionService';
 import { IPermissionService } from '../services/IPermissionService';
 import { Header } from './Header';
 import { StatsCards } from './StatsCards';
@@ -13,13 +13,16 @@ import { SitePermissions } from './SitePermissions';
 import { ListPermissions } from './ListPermissions';
 import { LoadingState } from './LoadingState';
 import { DeepScanDialog } from './DeepScanDialog';
-import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats } from '../models/IPermissionData';
+import { CheckAccess } from './CheckAccess';
+import { SiteAdmins } from './SiteAdmins';
+import { SiteGroups } from './SiteGroups';
+import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup } from '../models/IPermissionData';
 import { exportSitePermissions, exportListPermissions, exportDeepScanResults } from '../utils/CsvExport';
 import { Dialog, DialogType, DialogFooter } from '@fluentui/react';
 import styles from './PermissionViewer.module.scss';
 
 export interface IPermissionViewerProps {
-    spHttpClient: SPHttpClient; // restored
+    spHttpClient: SPHttpClient;
     webUrl: string;
     themeVariant: IReadonlyTheme | undefined;
     headerOpacity?: number;
@@ -31,6 +34,8 @@ export interface IPermissionViewerProps {
     webPartTitle?: string;
     webPartTitleFontSize?: string;
     contentFontSize?: string;
+    simulateAccessDenied?: boolean;
+    useMockData?: boolean;
 }
 
 const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props) => {
@@ -45,8 +50,16 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const [isLoading, setIsLoading] = React.useState<boolean>(true);
     const [loadingMessage, setLoadingMessage] = React.useState<string>('Loading site permissions...');
     const [permissionService, setPermissionService] = React.useState<IPermissionService>();
-    const [searchText, setSearchText] = React.useState<string>('');
     const [isExporting, setIsExporting] = React.useState<boolean>(false);
+
+    // Site Admins State
+    const [siteAdmins, setSiteAdmins] = React.useState<IUser[]>([]);
+    const [isLoadingAdmins, setIsLoadingAdmins] = React.useState<boolean>(false);
+
+    // Site Groups State
+    const [siteGroups, setSiteGroups] = React.useState<IGroup[]>([]);
+    const [isLoadingGroups, setIsLoadingGroups] = React.useState<boolean>(false);
+
     const [isScanning, setIsScanning] = React.useState<boolean>(false);
 
     // Deep Scan State
@@ -66,14 +79,173 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         onCancel?: () => void;
     }>({ isOpen: false, title: '', subText: '', onConfirm: () => { } });
 
+    // Access Control State
+    const [hasAccess, setHasAccess] = React.useState<boolean | null>(null); // null = checking
+    const [accessContacts, setAccessContacts] = React.useState<IUser[]>([]);
+
     React.useEffect(() => {
-        const service = new PermissionServiceImpl(props.spHttpClient, props.webUrl);
+        let service: IPermissionService;
+        if (props.useMockData) {
+            console.log("Using Mock Data");
+            service = new MockPermissionService();
+        } else {
+            service = new PermissionServiceImpl(props.spHttpClient, props.webUrl);
+        }
         setPermissionService(service);
-        loadData(service);
-    }, [props.excludedLists]);
+        checkAccessAndLoad(service);
+    }, [props.excludedLists, props.simulateAccessDenied, props.useMockData]);
+
+
+
+
+
+    // Demo Mode State
+    const [isDemoMode, setIsDemoMode] = React.useState<boolean>(false);
+    const [demoStep, setDemoStep] = React.useState<number>(0);
+    const [highlightStats, setHighlightStats] = React.useState<boolean>(false);
+    const [forcedExpandedListId, setForcedExpandedListId] = React.useState<string | null>(null);
+
+    // Header Handlers
+    const handlePlayDemo = () => {
+        if (isDemoMode) return;
+        setIsDemoMode(true);
+        setDemoStep(0);
+
+        // Reset view
+        setActiveTab('site');
+        setHighlightStats(false);
+        setForcedExpandedListId(null);
+        // setSearchQuery(''); // Need to expose setSearchQuery or handle Check Access search differently?
+        // Actually CheckAccess has its own state. We might need a ref or lift state. 
+        // Let's keep it simple: We'll switch tabs. Simulating internal component state is hard without refactoring.
+    };
+
+    React.useEffect(() => {
+        if (!isDemoMode) return;
+
+        // Steps Timing
+        let timer: any;
+
+        const runStep = () => {
+            switch (demoStep) {
+                case 0: // Start - Highlight Stats
+                    setHighlightStats(true);
+                    timer = setTimeout(() => setDemoStep(1), 1500);
+                    break;
+                case 1: // Move to Site Permissions
+                    setHighlightStats(false);
+                    setActiveTab('site');
+                    timer = setTimeout(() => setDemoStep(2), 2000); // Let them see it
+                    break;
+                case 2: // Move to Lists
+                    setActiveTab('lists');
+                    timer = setTimeout(() => setDemoStep(3), 1000); // Short pause before action
+                    break;
+                case 3: // Expand a List
+                    {
+                        // Find a list with unique perms to expand
+                        const uniqueList = lists.find(l => l.HasUniqueRoleAssignments);
+                        if (uniqueList) {
+                            setForcedExpandedListId(uniqueList.Id);
+                        }
+                        timer = setTimeout(() => setDemoStep(4), 2500); // Wait while expanded
+                    }
+                    break;
+                case 4: // Close List / Move to Groups
+                    setForcedExpandedListId(null);
+                    setActiveTab('groups');
+                    timer = setTimeout(() => setDemoStep(5), 2000);
+                    break;
+                case 5: // Move to Site Admins
+                    setActiveTab('admins');
+                    timer = setTimeout(() => setDemoStep(6), 2000);
+                    break;
+                case 6: // Move to Check Access
+                    setActiveTab('check_access');
+                    // Note: Can't easily script the internal state of CheckAccess without refactoring.
+                    // We will just show the tab.
+                    timer = setTimeout(() => setDemoStep(7), 2000);
+                    break;
+                case 7: // End
+                    setIsDemoMode(false);
+                    setDemoStep(0);
+                    break;
+            }
+        };
+
+        runStep();
+
+        return () => clearTimeout(timer);
+    }, [isDemoMode, demoStep, lists]);
+
+    const checkAccessAndLoad = async (service: IPermissionService) => {
+        setIsLoading(true);
+        setLoadingMessage('Checking permissions...');
+
+        try {
+            const currentUser = await service.getCurrentUser();
+            let isAllowed = currentUser.IsSiteAdmin;
+
+            // If not site admin, check owners group
+            if (!isAllowed) {
+                const owners = await service.getSiteOwners();
+                const isOwner = owners.some(o => o.LoginName === currentUser.LoginName || o.Email === currentUser.Email);
+                if (isOwner) {
+                    isAllowed = true;
+                }
+            }
+
+            // SIMULATION OVERRIDE
+            if (props.simulateAccessDenied) {
+                console.log("Simulating Access Denied via Web Part Property");
+                isAllowed = false;
+            }
+
+            if (isAllowed) {
+                setHasAccess(true);
+                loadData(service);
+            } else {
+                // Access Denied: Load Admins and Owners for contact info
+                setLoadingMessage('Loading contact information...');
+                const admins = await service.getSiteAdmins();
+                const owners = await service.getSiteOwners();
+
+                // Combine and merge roles
+                const mergedContacts = new Map<string, IUser>();
+
+                // Helper to add/merge
+                const addContact = (u: IUser) => {
+                    const key = u.LoginName || u.Email || u.Title;
+                    if (mergedContacts.has(key)) {
+                        const existing = mergedContacts.get(key)!;
+                        // Merge flags
+                        existing.IsSiteAdmin = existing.IsSiteAdmin || u.IsSiteAdmin;
+                        existing.IsSiteOwner = existing.IsSiteOwner || u.IsSiteOwner;
+                    } else {
+                        mergedContacts.set(key, { ...u });
+                    }
+                };
+
+                admins.forEach(addContact);
+                owners.forEach(addContact);
+
+                const uniqueContacts = Array.from(mergedContacts.values());
+
+                setAccessContacts(uniqueContacts);
+                setHasAccess(false);
+                setIsLoading(false);
+            }
+
+        } catch (error) {
+            console.error("Error checking access", error);
+            // Default to denied on error for security
+            setHasAccess(false);
+            setIsLoading(false);
+        }
+    };
 
     const loadData = async (service: IPermissionService) => {
-        setIsLoading(true);
+        // isLoading is already true from checkAccessAndLoad
         setLoadingMessage('Loading site permissions...');
 
         // Load site permissions
@@ -93,8 +265,30 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
         setStats({
             ...siteStats,
-            uniquePermissionsCount: uniqueListsCount + (sitePerms.length > 0 ? 1 : 0) // Simplified logic: +1 if site has perms (it always does)
+            uniquePermissionsCount: uniqueListsCount + (sitePerms.length > 0 ? 1 : 0)
         });
+
+        // Load Site Admins
+        setIsLoadingAdmins(true);
+        try {
+            const admins = await service.getSiteAdmins();
+            setSiteAdmins(admins);
+        } catch (e) {
+            console.error("Error loading admins", e);
+        } finally {
+            setIsLoadingAdmins(false);
+        }
+
+        // Load Site Groups
+        setIsLoadingGroups(true);
+        try {
+            const groups = await service.getSiteGroups();
+            setSiteGroups(groups);
+        } catch (e) {
+            console.error("Error loading groups", e);
+        } finally {
+            setIsLoadingGroups(false);
+        }
 
         // Sort lists: Unique first, then Inherited
         listsData.sort((a, b) => {
@@ -108,30 +302,39 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         setIsLoading(false);
     };
 
+    // ... (existing handlers)
+
+    if (hasAccess === false) {
+        return (
+            <div className={styles.permissionViewer}>
+                <div className={styles.webpartContainer}>
+                    <Header
+                        onRefresh={() => checkAccessAndLoad(permissionService!)}
+                        isLoading={isLoading}
+                        themeVariant={props.themeVariant}
+                        opacity={props.headerOpacity ?? 100}
+                        title={props.webPartTitle}
+                        titleFontSize={props.webPartTitleFontSize}
+                    />
+                    <div style={{ padding: '20px', textAlign: 'center' }}>
+                        <h2 style={{ color: '#d13438' }}>You don't have access to this report</h2>
+                        <p style={{ marginBottom: '20px' }}>Please check with the Site Owners or Site Administrators listed below.</p>
+
+                        <SiteAdmins users={accessContacts} isLoading={false} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+
     const handleRefresh = () => {
         if (permissionService) {
             loadData(permissionService);
         }
     };
 
-    const onSearch = (newValue: string) => {
-        setSearchText(newValue);
-        const lower = newValue.toLowerCase();
-
-        if (activeTab === 'site') {
-            const filtered = sitePermissions.filter(p =>
-                p.Member.Title.toLowerCase().includes(lower) ||
-                p.Member.Email?.toLowerCase().includes(lower)
-            );
-            setFilteredSitePermissions(filtered);
-        } else {
-            const filtered = lists.filter(l =>
-                l.Title.toLowerCase().includes(lower) ||
-                l.ServerRelativeUrl.toLowerCase().includes(lower)
-            );
-            setFilteredLists(filtered);
-        }
-    };
+    /* onSearch removed as unused */
 
     const handleGetListPermissions = async (listId: string) => {
         if (!permissionService) return [];
@@ -159,16 +362,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             if (success) {
                 const sitePerms = await permissionService.getSiteRoleAssignments();
                 setSitePermissions(sitePerms);
-                if (searchText) {
-                    const lower = searchText.toLowerCase();
-                    const filtered = sitePerms.filter(p =>
-                        p.Member.Title.toLowerCase().includes(lower) ||
-                        p.Member.Email?.toLowerCase().includes(lower)
-                    );
-                    setFilteredSitePermissions(filtered);
-                } else {
-                    setFilteredSitePermissions(sitePerms);
-                }
+                setFilteredSitePermissions(sitePerms);
             } else {
                 setErrorMessage("Failed to remove permission. Please try again or check console for details.");
             }
@@ -246,6 +440,43 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         } catch (error) {
             console.error("Error removing item permission", error);
             setErrorMessage("An unexpected error occurred while removing item permission.");
+        }
+    };
+
+    const handleRemoveFromGroup = (groupId: number, userId: number, userName: string) => {
+        setDeleteConfirmState({
+            isOpen: true,
+            title: `Remove from Group?`,
+            subText: `Are you sure you want to remove '${userName}' from this group?`,
+            onConfirm: () => executeRemoveFromGroup(groupId, userId),
+            onCancel: () => { /* No-op */ }
+        });
+    };
+
+    const executeRemoveFromGroup = async (groupId: number, userId: number) => {
+        if (!permissionService) return;
+        setDeleteConfirmState(prev => ({ ...prev, isOpen: false }));
+        setIsLoading(true);
+
+        try {
+            const success = await permissionService.removeUserFromGroup(groupId, userId);
+            if (success) {
+                // We need to refresh the Site Permissions view if a group was expanded. 
+                // Since SitePermissions manages its own 'groupMembers' state but we don't have access to it easily here...
+                // Ideally, we should lift that state up or force a refresh.
+                // Re-loading the permissions effectively resets the view which is acceptable but collapses groups.
+                // A better UX would be to just reload the data.
+
+                // Reload data to ensure consistency
+                await loadData(permissionService);
+            } else {
+                setErrorMessage("Failed to remove user from group.");
+            }
+        } catch (error) {
+            console.error("Error removing user from group", error);
+            setErrorMessage("An unexpected error occurred.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -332,16 +563,18 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             <div className={styles.webpartContainer}>
                 {(props.showComponentHeader !== false) && (
                     <Header
-                        onRefresh={handleRefresh}
-                        isLoading={isLoading}
-                        themeVariant={props.themeVariant}
-                        opacity={props.headerOpacity ?? 100}
                         title={props.webPartTitle}
                         titleFontSize={props.webPartTitleFontSize}
+                        themeVariant={props.themeVariant}
+                        opacity={props.headerOpacity}
+                        isLoading={isLoading}
+                        onRefresh={() => checkAccessAndLoad(permissionService!)}
+                        onPlayDemo={handlePlayDemo}
+                        isDemoRunning={isDemoMode}
                     />
                 )}
 
-                {(props.showStats !== false) && <StatsCards stats={stats} />}
+                {(props.showStats !== false) && <StatsCards stats={stats} highlight={highlightStats} />}
 
                 <div className={styles.tabsContainer}>
                     <Pivot
@@ -354,27 +587,26 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                     >
                         <PivotItem headerText="Site Permissions" itemKey="site" itemIcon="Shield" />
                         <PivotItem headerText="Lists & Libraries" itemKey="lists" itemIcon="List" />
+                        <PivotItem headerText="Groups" itemKey="groups" itemIcon="Group" />
+                        <PivotItem headerText="Check Access" itemKey="check_access" itemIcon="UserOptional" />
+                        <PivotItem headerText="Site Admins" itemKey="admins" itemIcon="Admin" />
                     </Pivot>
                 </div>
 
                 <div className={styles.toolbar}>
-                    <SearchBox
-                        placeholder="Search users or groups..."
-                        onChange={(_, newValue) => onSearch(newValue || '')}
-                        value={searchText}
-                        className={styles.searchBox}
-                    />
-                    <DefaultButton
-                        text={isExporting ? "Exporting..." : "Export to CSV"}
-                        iconProps={{ iconName: 'Download' }}
-                        onClick={handleExport}
-                        disabled={isExporting || isLoading}
-                        className={styles.exportBtn}
-                        styles={{
-                            root: { height: '32px' }, // Maintain height
-                            label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
-                        }}
-                    />
+                    {(activeTab === 'site' || activeTab === 'lists') && (
+                        <DefaultButton
+                            text={isExporting ? "Exporting..." : "Export to CSV"}
+                            iconProps={{ iconName: 'Download' }}
+                            onClick={handleExport}
+                            disabled={isExporting || isLoading}
+                            className={styles.exportBtn}
+                            styles={{
+                                root: { height: '32px' }, // Maintain height
+                                label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                            }}
+                        />
+                    )}
                 </div>
 
                 <div className={styles.content}>
@@ -386,6 +618,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                             permissionService={permissionService}
                             contentFontSize={props.contentFontSize}
                             onRemovePermission={handleRemoveSitePermission}
+                            onRemoveFromGroup={handleRemoveFromGroup}
                         />
                     )}
 
@@ -398,6 +631,32 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                             buttonFontSize={props.buttonFontSize}
                             contentFontSize={props.contentFontSize}
                             onRemovePermission={handleRemoveListPermission}
+                            forcedExpandedListId={forcedExpandedListId}
+                        />
+                    )}
+
+                    {!isLoading && activeTab === 'groups' && (
+                        <SiteGroups
+                            groups={siteGroups}
+                            isLoading={isLoadingGroups}
+                            permissionService={permissionService!}
+                            contentFontSize={props.contentFontSize}
+                        />
+                    )}
+
+                    {!isLoading && activeTab === 'check_access' && (
+                        <CheckAccess
+                            permissionService={permissionService!}
+                            sitePermissions={sitePermissions}
+                            lists={lists}
+                            contentFontSize={props.contentFontSize}
+                        />
+                    )}
+
+                    {!isLoading && activeTab === 'admins' && (
+                        <SiteAdmins
+                            users={siteAdmins}
+                            isLoading={isLoadingAdmins}
                         />
                     )}
                 </div>

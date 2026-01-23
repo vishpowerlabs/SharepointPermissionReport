@@ -12,19 +12,29 @@ export interface IListPermissionsProps {
 
     buttonFontSize?: string;
     contentFontSize?: string;
+    forcedExpandedListId?: string | null;
 }
 
 export const ListPermissions: React.FunctionComponent<IListPermissionsProps> = (props) => {
-    const { lists, getListPermissions, onRemovePermission } = props;
+    const { lists, getListPermissions, onRemovePermission, forcedExpandedListId } = props;
     const [expandedList, setExpandedList] = React.useState<string | null>(null);
     const [permissionsMap, setPermissionsMap] = React.useState<{ [key: string]: IRoleAssignment[] }>({});
     const [loadingMap, setLoadingMap] = React.useState<{ [key: string]: boolean }>({});
+
+    // Effect to handle forced expansion from parent (Demo Mode)
+    React.useEffect(() => {
+        if (forcedExpandedListId) {
+            handleExpand(forcedExpandedListId);
+        }
+    }, [forcedExpandedListId]);
 
     const handleExpand = async (listId: string) => {
         const list = lists.find(l => l.Id === listId);
         if (!list?.HasUniqueRoleAssignments) return;
 
-        if (expandedList === listId) {
+        // Toggle logic: if clicking already expanded, close it. BUT if forced, we generally want to open.
+        // For simplicity reusing logic but handling the check.
+        if (expandedList === listId && !forcedExpandedListId) {
             setExpandedList(null);
             return;
         }

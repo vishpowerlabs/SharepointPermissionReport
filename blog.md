@@ -34,10 +34,15 @@ The web part provides a "Single Pane of Glass" view for all site security.
 - **Smart Filtering**: Automatically filters out "Limited Access" noise. The report only shows explicit permission grants (e.g., Read, Edit), so you don't get cluttered with users who only have access to nested items.
 
 ### 3.3. Deep Dive Capabilities
-- **Group Expansion**: Don't just see "Marketing Members" - click to expand SharePoint and Security groups to reveal the actual individual users inside.
+- **Group Management**: Don't just see "Marketing Members" - click to expand SharePoint groups to reveal the individual users inside. **New!** Directly remove users from SharePoint groups instantly from the details panel, streamlining your security management workflow.
 - **Deep Scan**: Initiate a **Deep Scan** on any list or library (even inherited ones) to verify every single item. This is critical for catching individual files or folders that may have broken inheritance within an otherwise standard library.
 
-### 3.4. Customization & Export
+### 3.4. Check Access (Audit View)
+- **User Permission Audit**: Instantly search for any user in your organization directory (using the People Picker API) to see their explicit permissions.
+- **Deep Scan & Validation**: Validate security by running a "Deep Scan" to find every list or library where the selected user has unique permissions. The tool now provides clear confirmation: "No unique permissions found" means the user is clean.
+- **Remove Permissions**: Directly revoke specific permissions or remove users from groups right from the report interface for immediate remediation.
+
+### 3.5. Customization & Export
 - **Visual Customization**: Tailor the look and feel of the web part to match your page perfectly.
     - **Font Sizes**: Independently configure font sizes for the Web Part Title, Content (Table headers & rows), and Buttons.
     - **Header Control**: Toggle the display of the web part header component.
@@ -48,7 +53,7 @@ The web part provides a "Single Pane of Glass" view for all site security.
     - **Deep Scan Export**: When performing a deep scan on a specific list or library, you can export the detailed item-level unique permissions.
 - **Search**: Instantly filter the report to find specific users, groups, or lists.
 
-### 3.5. Theme Awareness
+### 3.6. Theme Awareness
 The web part is fully **Theme Aware**. It doesn't just sit on the page; it feels like part of the site.
 - **Dynamic Styling**: The web part automatically detects the current SharePoint site theme.
 - **Adaptive Colors**: Backgrounds, fonts, and primary action buttons (like Export) automatically change their colors to match your selected site appearance (e.g., changing from Blue to Orange theme updates the web part accents instantly).

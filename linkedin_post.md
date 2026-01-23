@@ -17,6 +17,7 @@ A unified, single-pane-of-glass dashboard that visualizes all user and group per
 *   **Centralized Dashboard:** View Site, List, and Library permissions in one place.
 *   **Visual Badges:** Instantly spot "Full Control" vs "Read" access with color-coded indicators.
 *   **Deep Scan:** Drill down into any list to verify every single item for unique permissions.
+*   **Check Access (New!):** Audit specific users across the entire directory and revoke permissions in one click.
 *   **Smart Filtering:** Automatically hides "Limited Access" noise for a clean report.
 *   **Code Quality:** Verified by SonarQube (0 Security Issues, 0 Hotspots).
 *   **Theme Aware:** Automatically adapts to your site's look and feel.
