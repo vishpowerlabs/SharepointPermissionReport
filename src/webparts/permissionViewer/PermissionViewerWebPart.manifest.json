@@ -23,7 +23,11 @@
             },
             "officeFabricIconFontName": "Permissions",
             "properties": {
-                "description": "Permission Viewer"
+                "description": "Permission Viewer",
+                "showExternalUserAudit": true,
+                "showSharingLinks": true,
+                "showOrphanedUsers": true,
+                "showSecurityGovernanceTab": true
             }
         }
     ]

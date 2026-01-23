@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pivot, PivotItem } from '@fluentui/react/lib/Pivot';
+import { Nav, INavLinkGroup } from '@fluentui/react/lib/Nav';
 import { DefaultButton, PrimaryButton } from '@fluentui/react/lib/Button';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import { SPHttpClient } from '@microsoft/sp-http';
@@ -16,6 +16,7 @@ import { DeepScanDialog } from './DeepScanDialog';
 import { CheckAccess } from './CheckAccess';
 import { SiteAdmins } from './SiteAdmins';
 import { SiteGroups } from './SiteGroups';
+import { SecurityGovernance } from './SecurityGovernance';
 import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup } from '../models/IPermissionData';
 import { exportSitePermissions, exportListPermissions, exportDeepScanResults } from '../utils/CsvExport';
 import { Dialog, DialogType, DialogFooter } from '@fluentui/react';
@@ -36,6 +37,10 @@ export interface IPermissionViewerProps {
     contentFontSize?: string;
     simulateAccessDenied?: boolean;
     useMockData?: boolean;
+    showExternalUserAudit?: boolean;
+    showSharingLinks?: boolean;
+    showOrphanedUsers?: boolean;
+    showSecurityGovernanceTab?: boolean;
 }
 
 const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props) => {
@@ -99,84 +104,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
 
 
-    // Demo Mode State
-    const [isDemoMode, setIsDemoMode] = React.useState<boolean>(false);
-    const [demoStep, setDemoStep] = React.useState<number>(0);
-    const [highlightStats, setHighlightStats] = React.useState<boolean>(false);
-    const [forcedExpandedListId, setForcedExpandedListId] = React.useState<string | null>(null);
 
-    // Header Handlers
-    const handlePlayDemo = () => {
-        if (isDemoMode) return;
-        setIsDemoMode(true);
-        setDemoStep(0);
-
-        // Reset view
-        setActiveTab('site');
-        setHighlightStats(false);
-        setForcedExpandedListId(null);
-        // setSearchQuery(''); // Need to expose setSearchQuery or handle Check Access search differently?
-        // Actually CheckAccess has its own state. We might need a ref or lift state. 
-        // Let's keep it simple: We'll switch tabs. Simulating internal component state is hard without refactoring.
-    };
-
-    React.useEffect(() => {
-        if (!isDemoMode) return;
-
-        // Steps Timing
-        let timer: any;
-
-        const runStep = () => {
-            switch (demoStep) {
-                case 0: // Start - Highlight Stats
-                    setHighlightStats(true);
-                    timer = setTimeout(() => setDemoStep(1), 1500);
-                    break;
-                case 1: // Move to Site Permissions
-                    setHighlightStats(false);
-                    setActiveTab('site');
-                    timer = setTimeout(() => setDemoStep(2), 2000); // Let them see it
-                    break;
-                case 2: // Move to Lists
-                    setActiveTab('lists');
-                    timer = setTimeout(() => setDemoStep(3), 1000); // Short pause before action
-                    break;
-                case 3: // Expand a List
-                    {
-                        // Find a list with unique perms to expand
-                        const uniqueList = lists.find(l => l.HasUniqueRoleAssignments);
-                        if (uniqueList) {
-                            setForcedExpandedListId(uniqueList.Id);
-                        }
-                        timer = setTimeout(() => setDemoStep(4), 2500); // Wait while expanded
-                    }
-                    break;
-                case 4: // Close List / Move to Groups
-                    setForcedExpandedListId(null);
-                    setActiveTab('groups');
-                    timer = setTimeout(() => setDemoStep(5), 2000);
-                    break;
-                case 5: // Move to Site Admins
-                    setActiveTab('admins');
-                    timer = setTimeout(() => setDemoStep(6), 2000);
-                    break;
-                case 6: // Move to Check Access
-                    setActiveTab('check_access');
-                    // Note: Can't easily script the internal state of CheckAccess without refactoring.
-                    // We will just show the tab.
-                    timer = setTimeout(() => setDemoStep(7), 2000);
-                    break;
-                case 7: // End
-                    setIsDemoMode(false);
-                    setDemoStep(0);
-                    break;
-            }
-        };
-
-        runStep();
-
-        return () => clearTimeout(timer);
-    }, [isDemoMode, demoStep, lists]);
 
     const checkAccessAndLoad = async (service: IPermissionService) => {
         setIsLoading(true);
@@ -558,6 +486,55 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         return `This will verify every single item in "${confirmScanList?.title}" to find unique permissions. This might take a while for large lists. Continue?`;
     };
 
+    const navGroups: INavLinkGroup[] = [
+        {
+            links: [
+                {
+                    name: 'Site Permissions',
+                    url: '',
+                    key: 'site',
+                    icon: 'Shield',
+                    onClick: () => { setActiveTab('site'); }
+                },
+                {
+                    name: 'Lists & Libraries',
+                    url: '',
+                    key: 'lists',
+                    icon: 'List',
+                    onClick: () => { setActiveTab('lists'); }
+                },
+                {
+                    name: 'Security & Governance',
+                    url: '',
+                    key: 'governance',
+                    icon: 'SecurityGroup',
+                    onClick: () => { setActiveTab('governance'); }
+                },
+                {
+                    name: 'Site Groups',
+                    url: '',
+                    key: 'groups',
+                    icon: 'Group',
+                    onClick: () => { setActiveTab('groups'); }
+                },
+                {
+                    name: 'Check Access',
+                    url: '',
+                    key: 'check_access',
+                    icon: 'UserOptional',
+                    onClick: () => { setActiveTab('check_access'); }
+                },
+                {
+                    name: 'Site Admins',
+                    url: '',
+                    key: 'admins',
+                    icon: 'Admin',
+                    onClick: () => { setActiveTab('admins'); }
+                }
+            ].filter(link => link.key !== 'governance' || props.showSecurityGovernanceTab !== false)
+        }
+    ];
+
     return (
         <div className={styles.permissionViewer}>
             <div className={styles.webpartContainer}>
@@ -569,201 +546,198 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         opacity={props.headerOpacity}
                         isLoading={isLoading}
                         onRefresh={() => checkAccessAndLoad(permissionService!)}
-                        onPlayDemo={handlePlayDemo}
-                        isDemoRunning={isDemoMode}
+
                     />
                 )}
 
-                {(props.showStats !== false) && <StatsCards stats={stats} highlight={highlightStats} />}
-
-                <div className={styles.tabsContainer}>
-                    <Pivot
-                        onLinkClick={(item) => {
-                            if (item?.props.itemKey) {
-                                setActiveTab(item.props.itemKey);
-                            }
-                        }}
-                        selectedKey={activeTab}
-                    >
-                        <PivotItem headerText="Site Permissions" itemKey="site" itemIcon="Shield" />
-                        <PivotItem headerText="Lists & Libraries" itemKey="lists" itemIcon="List" />
-                        <PivotItem headerText="Groups" itemKey="groups" itemIcon="Group" />
-                        <PivotItem headerText="Check Access" itemKey="check_access" itemIcon="UserOptional" />
-                        <PivotItem headerText="Site Admins" itemKey="admins" itemIcon="Admin" />
-                    </Pivot>
-                </div>
-
-                <div className={styles.toolbar}>
-                    {(activeTab === 'site' || activeTab === 'lists') && (
-                        <DefaultButton
-                            text={isExporting ? "Exporting..." : "Export to CSV"}
-                            iconProps={{ iconName: 'Download' }}
-                            onClick={handleExport}
-                            disabled={isExporting || isLoading}
-                            className={styles.exportBtn}
+                <div className={styles.layoutContainer}>
+                    <div className={styles.navigation}>
+                        <Nav
+                            groups={navGroups}
+                            selectedKey={activeTab}
                             styles={{
-                                root: { height: '32px' }, // Maintain height
-                                label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                root: {
+                                    width: '100%',
+                                    height: '100%',
+                                    boxSizing: 'border-box',
+                                    border: '1px solid transparent',
+                                    overflowY: 'auto'
+                                }
                             }}
                         />
-                    )}
-                </div>
+                    </div>
 
-                <div className={styles.content}>
-                    {isLoading && <LoadingState message={loadingMessage} />}
+                    <div className={styles.mainCanvas}>
+                        {(props.showStats !== false) && <StatsCards stats={stats} highlight={false} />}
 
-                    {!isLoading && activeTab === 'site' && (
-                        <SitePermissions
-                            permissions={filteredSitePermissions}
-                            permissionService={permissionService}
-                            contentFontSize={props.contentFontSize}
-                            onRemovePermission={handleRemoveSitePermission}
-                            onRemoveFromGroup={handleRemoveFromGroup}
-                        />
-                    )}
+                        <div className={styles.toolbar}>
+                            {(activeTab === 'site' || activeTab === 'lists') && (
+                                <DefaultButton
+                                    text={isExporting ? "Exporting..." : "Export to CSV"}
+                                    iconProps={{ iconName: 'Download' }}
+                                    onClick={handleExport}
+                                    disabled={isExporting || isLoading}
+                                    className={styles.exportBtn}
+                                    styles={{
+                                        root: { height: '32px' }, // Maintain height
+                                        label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                    }}
+                                />
+                            )}
+                        </div>
 
-                    {!isLoading && activeTab === 'lists' && (
-                        <ListPermissions
-                            lists={filteredLists}
-                            getListPermissions={handleGetListPermissions}
-                            onScanItems={handleDeepScan}
-                            themeVariant={props.themeVariant}
-                            buttonFontSize={props.buttonFontSize}
-                            contentFontSize={props.contentFontSize}
-                            onRemovePermission={handleRemoveListPermission}
-                            forcedExpandedListId={forcedExpandedListId}
-                        />
-                    )}
+                        <div className={styles.content}>
+                            {isLoading && <LoadingState message={loadingMessage} />}
 
-                    {!isLoading && activeTab === 'groups' && (
-                        <SiteGroups
-                            groups={siteGroups}
-                            isLoading={isLoadingGroups}
-                            permissionService={permissionService!}
-                            contentFontSize={props.contentFontSize}
-                        />
-                    )}
+                            {!isLoading && activeTab === 'site' && (
+                                <SitePermissions
+                                    permissions={filteredSitePermissions}
+                                    permissionService={permissionService}
+                                    contentFontSize={props.contentFontSize}
+                                    onRemovePermission={handleRemoveSitePermission}
+                                    onRemoveFromGroup={handleRemoveFromGroup}
+                                />
+                            )}
 
-                    {!isLoading && activeTab === 'check_access' && (
-                        <CheckAccess
-                            permissionService={permissionService!}
-                            sitePermissions={sitePermissions}
-                            lists={lists}
-                            contentFontSize={props.contentFontSize}
-                        />
-                    )}
+                            {!isLoading && activeTab === 'lists' && (
+                                <ListPermissions
+                                    lists={filteredLists}
+                                    getListPermissions={handleGetListPermissions}
+                                    onScanItems={handleDeepScan}
+                                    themeVariant={props.themeVariant}
+                                    buttonFontSize={props.buttonFontSize}
+                                    contentFontSize={props.contentFontSize}
+                                    onRemovePermission={handleRemoveListPermission}
+                                    forcedExpandedListId={null}
+                                />
+                            )}
 
-                    {!isLoading && activeTab === 'admins' && (
-                        <SiteAdmins
-                            users={siteAdmins}
-                            isLoading={isLoadingAdmins}
-                        />
-                    )}
-                </div>
-            </div>
+                            {!isLoading && activeTab === 'groups' && (
+                                <SiteGroups
+                                    groups={siteGroups}
+                                    isLoading={isLoadingGroups}
+                                    permissionService={permissionService!}
+                                    contentFontSize={props.contentFontSize}
+                                />
+                            )}
 
-            <DeepScanDialog
-                isOpen={isDeepScanOpen}
-                onDismiss={() => setIsDeepScanOpen(false)}
-                listTitle={deepScanListTitle}
-                items={deepScanItems}
-                onDownload={downloadDeepScanResults}
-                buttonFontSize={props.buttonFontSize}
-                contentFontSize={props.contentFontSize}
-                onRemovePermission={handleRemoveDeepScanItemPermission}
-            />
+                            {!isLoading && activeTab === 'check_access' && (
+                                <CheckAccess
+                                    permissionService={permissionService!}
+                                    sitePermissions={sitePermissions}
+                                    lists={lists}
+                                    contentFontSize={props.contentFontSize}
+                                />
+                            )}
 
-            <Dialog
-                hidden={!confirmScanList}
-                onDismiss={() => { if (!isScanning) setConfirmScanList(null); }}
-                dialogContentProps={{
-                    type: DialogType.normal,
-                    title: getDialogTitle(),
-                    subText: getDialogSubText()
-                }}
-            >
-                {isScanning ? (
-                    <Spinner size={SpinnerSize.large} label="Scanning for unique permissions..." />
-                ) : (
-                    <DialogFooter>
-                        {scanNoResults ? (
+                            {!isLoading && activeTab === 'governance' && (
+                                <SecurityGovernance
+                                    contentFontSize={props.contentFontSize}
+                                    permissionService={permissionService!}
+                                    showExternalUserAudit={props.showExternalUserAudit}
+                                    showSharingLinks={props.showSharingLinks}
+                                    showOrphanedUsers={props.showOrphanedUsers}
+                                />
+                            )}
+
+                            {!isLoading && activeTab === 'admins' && (
+                                <SiteAdmins
+                                    users={siteAdmins}
+                                    isLoading={isLoadingAdmins}
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    <DeepScanDialog
+                        isOpen={isDeepScanOpen}
+                        onDismiss={() => setIsDeepScanOpen(false)}
+                        listTitle={deepScanListTitle}
+                        items={deepScanItems}
+                        onDownload={downloadDeepScanResults}
+                        buttonFontSize={props.buttonFontSize}
+                        contentFontSize={props.contentFontSize}
+                        onRemovePermission={handleRemoveDeepScanItemPermission}
+                    />
+
+                    <Dialog
+                        hidden={!confirmScanList}
+                        onDismiss={() => { if (!isScanning) setConfirmScanList(null); }}
+                        dialogContentProps={{
+                            type: DialogType.normal,
+                            title: getDialogTitle(),
+                            subText: getDialogSubText()
+                        }}
+                    >
+                        {isScanning ? (
+                            <Spinner size={SpinnerSize.large} label="Scanning for unique permissions..." />
+                        ) : (
+                            <DialogFooter>
+                                {scanNoResults ? (
+                                    <PrimaryButton
+                                        onClick={() => setConfirmScanList(null)}
+                                        text="Close"
+                                        styles={{
+                                            root: { height: '32px' },
+                                            label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                        }}
+                                    />
+                                ) : (
+                                    <>
+                                        <PrimaryButton
+                                            onClick={executeDeepScan}
+                                            text="Start Scan"
+                                            styles={{
+                                                root: { height: '32px' },
+                                                label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                            }}
+                                        />
+                                        <DefaultButton
+                                            onClick={() => setConfirmScanList(null)}
+                                            text="Cancel"
+                                            styles={{
+                                                root: { height: '32px' },
+                                                label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                            }}
+                                        />
+                                    </>
+                                )}
+                            </DialogFooter>
+                        )}
+                    </Dialog>
+
+                    {/* Delete Confirmation Dialog */}
+                    <Dialog
+                        hidden={!deleteConfirmState.isOpen}
+                        onDismiss={() => setDeleteConfirmState(prev => ({ ...prev, isOpen: false }))}
+                        dialogContentProps={{
+                            type: DialogType.normal,
+                            title: deleteConfirmState.title,
+                            subText: deleteConfirmState.subText,
+                        }}
+                        modalProps={{
+                            isBlocking: true,
+                            styles: { main: { maxWidth: 450 } }
+                        }}
+                    >
+                        <DialogFooter>
                             <PrimaryButton
-                                onClick={() => setConfirmScanList(null)}
-                                text="Close"
+                                onClick={deleteConfirmState.onConfirm}
+                                text="Remove"
                                 styles={{
-                                    root: { height: '32px' },
-                                    label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
+                                    root: { background: '#d13438', border: '1px solid #d13438' }, // Red color for danger
+                                    rootHovered: { background: '#a4262c' },
+                                    label: { fontWeight: 600 }
                                 }}
                             />
-                        ) : (
-                            <>
-                                <PrimaryButton
-                                    onClick={executeDeepScan}
-                                    text="Start Scan"
-                                    styles={{
-                                        root: { height: '32px' },
-                                        label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
-                                    }}
-                                />
-                                <DefaultButton
-                                    onClick={() => setConfirmScanList(null)}
-                                    text="Cancel"
-                                    styles={{
-                                        root: { height: '32px' },
-                                        label: { fontSize: props.buttonFontSize || '12px', fontWeight: 600 }
-                                    }}
-                                />
-                            </>
-                        )}
-                    </DialogFooter>
-                )}
-            </Dialog>
-
-            {/* Delete Confirmation Dialog */}
-            <Dialog
-                hidden={!deleteConfirmState.isOpen}
-                onDismiss={() => setDeleteConfirmState(prev => ({ ...prev, isOpen: false }))}
-                dialogContentProps={{
-                    type: DialogType.normal,
-                    title: deleteConfirmState.title,
-                    subText: deleteConfirmState.subText,
-                }}
-                modalProps={{
-                    isBlocking: true,
-                    styles: { main: { maxWidth: 450 } }
-                }}
-            >
-                <DialogFooter>
-                    <PrimaryButton
-                        onClick={deleteConfirmState.onConfirm}
-                        text="Remove"
-                        styles={{
-                            root: { background: '#d13438', border: '1px solid #d13438' }, // Red color for danger
-                            rootHovered: { background: '#a4262c' },
-                            label: { fontWeight: 600 }
-                        }}
-                    />
-                    <DefaultButton
-                        onClick={() => setDeleteConfirmState(prev => ({ ...prev, isOpen: false }))}
-                        text="Cancel"
-                    />
-                </DialogFooter>
-            </Dialog>
-
-            {/* Error Dialog */}
-            <Dialog
-                hidden={!errorMessage}
-                onDismiss={() => setErrorMessage(null)}
-                dialogContentProps={{
-                    type: DialogType.normal,
-                    title: 'Error',
-                    subText: errorMessage || 'An unexpected error occurred.'
-                }}
-            >
-                <DialogFooter>
-                    <PrimaryButton onClick={() => setErrorMessage(null)} text="OK" />
-                </DialogFooter>
-            </Dialog>
+                            <DefaultButton
+                                onClick={() => setDeleteConfirmState(prev => ({ ...prev, isOpen: false }))}
+                                text="Cancel"
+                            />
+                        </DialogFooter>
+                    </Dialog>
+                </div>
+            </div>
         </div>
     );
 };

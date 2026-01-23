@@ -1,6 +1,6 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import { IPermissionService } from './IPermissionService';
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo } from '../models/IPermissionData';
 
 export class PermissionServiceImpl implements IPermissionService {
     private readonly _spHttpClient: SPHttpClient;
@@ -520,6 +520,195 @@ export class PermissionServiceImpl implements IPermissionService {
         } catch (error) {
             console.error(`Error removing user ${userId} from group ${groupId}`, error);
             return false;
+        }
+    }
+
+    public async getExternalUsers(): Promise<IUser[]> {
+        try {
+            const allUsers = await this._getAllSiteUsers();
+            // Filter for #ext# in LoginName or Email
+            return allUsers.filter(u =>
+                (u.LoginName && u.LoginName.toLowerCase().indexOf('#ext#') !== -1) ||
+                (u.Email && u.Email.toLowerCase().indexOf('#ext#') !== -1)
+            );
+        } catch (error) {
+            console.error("Error fetching external users", error);
+            return [];
+        }
+    }
+
+    public async getSharingLinks(): Promise<ISharingInfo[]> {
+        try {
+            // Strategy: Scan specific libraries (e.g. "Documents") for sharing links.
+            // In a real generic tool, we might scan all libraries, but that is heavy.
+            // We'll focus on the default "Documents" library for this "Report".
+
+            const listTitle = "Documents";
+            // Get items from Documents
+            // We need the Absolute URL for GetObjectSharingInformation
+            const itemsEndpoint = `${this._webUrl}/_api/web/lists/getbytitle('${listTitle}')/items?$select=Id,Title,FileRef,FileLeafRef,FileSystemObjectType&$top=20`;
+            // Limiting to top 20 for performance in this demo. Real reporting would need paging/search.
+
+            const response: SPHttpClientResponse = await this._spHttpClient.get(itemsEndpoint, SPHttpClient.configurations.v1);
+            if (!response.ok) return [];
+
+            const json = await response.json();
+            const items = json.value || [];
+
+            const sharingResults: ISharingInfo[] = [];
+
+            // We must process sequentially or with limited concurrency to avoid throttling
+            for (const item of items) {
+                try {
+                    // Construct absolute Object URL
+                    // FileRef is server relative e.g. /sites/mysite/Shared Documents/foo.docx
+                    // We need https://tenant.sharepoint.com/sites/mysite/...
+
+                    // Simple hack: assume _webUrl doesn't have trailing slash? 
+                    // But _webUrl might be https://tenant.sharepoint.com/sites/mysite
+                    // We need the domain.
+
+                    const location = window.location;
+                    const domain = `${location.protocol}//${location.hostname}`;
+                    const objectUrl = `${domain}${item.FileRef}`;
+
+                    const sharingInfoEndpoint = `${this._webUrl}/_api/SP.Sharing.ObjectSharingInformation.GetObjectSharingInformation`;
+
+                    const payload = {
+                        "request": {
+                            "__metadata": { "type": "SP.Sharing.SharingInformationRequest" },
+                            "objectUrl": objectUrl,
+                            "retrieveAnonymousLinks": true,
+                            "retrieveOrganizationSharingLinks": true, // Company-wide links
+                            "retrieveSpecificPeopleSharingLinks": true,
+                            "retrieveUserInfoDetails": true
+                        }
+                    };
+
+                    const sharingResp = await this._spHttpClient.post(
+                        sharingInfoEndpoint,
+                        SPHttpClient.configurations.v1,
+                        {
+                            body: JSON.stringify(payload),
+                            headers: {
+                                'Accept': 'application/json;odata=verbose', // Verbose needed for some deep props? Try standard first.
+                                'Content-Type': 'application/json;odata=verbose'
+                            }
+                        }
+                    );
+
+                    if (sharingResp.ok) {
+                        const sharingJson = await sharingResp.json();
+                        const data = sharingJson.d || sharingJson; // Handle verbose/noverbose
+
+                        // Extract Anonymous Links
+                        if (data.AnonymousEditLink || data.AnonymousViewLink) {
+                            sharingResults.push({
+                                documentName: item.FileLeafRef,
+                                documentUrl: objectUrl,
+                                linkType: "Anonymous (Anyone)",
+                                sharedWith: ["Anyone with the link"]
+                            });
+                        }
+
+                        // Extract specific sharing links?
+                        // "SharingLinks" property contains list of links
+                        if (data.SharingLinks && data.SharingLinks.results) {
+                            data.SharingLinks.results.forEach((link: any) => {
+                                // link.Url, link.IsActive, link.LinkKind
+                                // LinkKind: 1=Organization, 2=Anonymous?, 3=SpecificPeople?
+                                let type = "Specific People";
+                                if (link.LinkKind === 1) type = "Organization (Internal)";
+                                if (link.LinkKind === 2) type = "Anonymous";
+
+                                // Avoid duplicate logging if we caught it above, but SharingLinks usually details specific generated links
+                                sharingResults.push({
+                                    documentName: item.FileLeafRef,
+                                    documentUrl: objectUrl, // This is the item URL, not the *sharing* link URL. The user might want the sharing link itself?
+                                    // link.Url is the SHARING link.
+                                    // But we should put the sharing link in the report?
+                                    // ISharingInfo has 'documentUrl', let's maybe put the Sharing Link in 'sharedWith' or add a field?
+                                    // The user asked "provide the shareling".
+                                    // I'll put the Sharing Link URL in 'documentUrl'??? No that's confusing.
+                                    // I will append it to details.
+
+                                    // Let's repurpose: documentUrl -> The Item URL.
+                                    // Add details to sharedWith.
+
+                                    sharedWith: [`Link: ${link.Url}`],
+                                    linkType: type
+                                });
+                            });
+                        }
+                    }
+
+                } catch (e) {
+                    console.error("Error getting sharing info for " + item.FileLeafRef, e);
+                }
+            }
+
+            return sharingResults;
+
+        } catch (error) {
+            console.error("Error fetching sharing links", error);
+            // Fallback to empty if list not found
+            return [];
+        }
+    }
+
+    public async getOrphanedUsers(): Promise<IUser[]> {
+        try {
+            const allUsers = await this._getAllSiteUsers();
+            // Simple heuristic: Users with no email, not system, not sharing links, not admin
+            const systemUsers = ['System Account', 'SharePoint App', 'NT AUTHORITY\\authenticated users', 'spsearch'];
+
+            return allUsers.filter(u =>
+                !u.Email &&
+                u.PrincipalType === 1 &&
+                !u.IsSiteAdmin &&
+                !systemUsers.includes(u.Title) &&
+                u.Title.indexOf('SharingLinks') === -1 &&
+                (!u.LoginName || u.LoginName.indexOf('nt service') === -1)
+            );
+        } catch (error) {
+            console.error("Error fetching orphaned users", error);
+            return [];
+        }
+    }
+
+    private async _getAllSiteUsers(): Promise<IUser[]> {
+        try {
+            const endpoint = `${this._webUrl}/_api/web/siteusers`;
+            const response: SPHttpClientResponse = await this._spHttpClient.get(endpoint, SPHttpClient.configurations.v1);
+
+            if (!response.ok) {
+                console.error(`Error fetching site users: ${response.status} ${response.statusText}`);
+                try {
+                    const errorText = await response.text();
+                    console.error("Error details:", errorText);
+                } catch (e) {
+                    console.error("Could not read error details");
+                }
+                return [];
+            }
+
+            const json = await response.json();
+
+            if (json?.value) {
+                return json.value.map((u: any) => ({
+                    Id: u.Id,
+                    Title: u.Title,
+                    Email: u.Email,
+                    LoginName: u.LoginName,
+                    PrincipalType: u.PrincipalType,
+                    IsHiddenInUI: u.IsHiddenInUI,
+                    IsSiteAdmin: u.IsSiteAdmin
+                } as IUser));
+            }
+            return [];
+        } catch (error) {
+            console.error("Error fetching all site users", error);
+            return [];
         }
     }
 }

@@ -31,6 +31,10 @@ export interface IPermissionViewerWebPartProps {
     contentFontSize: string;
     simulateAccessDenied: boolean;
     useMockData: boolean;
+    showExternalUserAudit: boolean;
+    showSharingLinks: boolean;
+    showOrphanedUsers: boolean;
+    showSecurityGovernanceTab: boolean;
 }
 
 
@@ -80,7 +84,11 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                 webPartTitleFontSize: this.properties.webPartTitleFontSize,
                 contentFontSize: this.properties.contentFontSize || '14px',
                 simulateAccessDenied: this.properties.simulateAccessDenied,
-                useMockData: this.properties.useMockData
+                useMockData: this.properties.useMockData,
+                showExternalUserAudit: this.properties.showExternalUserAudit,
+                showSharingLinks: this.properties.showSharingLinks,
+                showOrphanedUsers: this.properties.showOrphanedUsers,
+                showSecurityGovernanceTab: this.properties.showSecurityGovernanceTab
             }
         );
 
@@ -181,6 +189,27 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                                     checked: false,
                                     onText: "Mock",
                                     offText: "Production"
+                                })
+                            ]
+                        },
+                        {
+                            groupName: "Security & Governance",
+                            groupFields: [
+                                PropertyPaneToggle('showSecurityGovernanceTab', {
+                                    label: "Show Security & Governance Tab",
+                                    checked: true
+                                }),
+                                PropertyPaneToggle('showExternalUserAudit', {
+                                    label: "Show External User Audit",
+                                    checked: true
+                                }),
+                                PropertyPaneToggle('showSharingLinks', {
+                                    label: "Show Sharing Links Report",
+                                    checked: true
+                                }),
+                                PropertyPaneToggle('showOrphanedUsers', {
+                                    label: "Show Orphaned Users",
+                                    checked: true
                                 })
                             ]
                         }

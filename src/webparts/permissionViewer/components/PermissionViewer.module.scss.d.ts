@@ -29,9 +29,31 @@ export interface IExportStyles {
 
   'exportBtn': string;
 
+  'govBtn': string;
+
+  'govIcon': string;
+
+  'govList': string;
+
+  'govStat': string;
+
+  'govStatAlert': string;
+
+  'govStatInfo': string;
+
+  'govStatWarning': string;
+
+  'govTitle': string;
+
+  'governanceCard': string;
+
+  'governanceGrid': string;
+
   'header': string;
 
   'inheritedInfo': string;
+
+  'layoutContainer': string;
 
   'listCard': string;
 
@@ -47,9 +69,13 @@ export interface IExportStyles {
 
   'loadingText': string;
 
+  'mainCanvas': string;
+
   'ms-Dialog-subText': string;
 
   'ms-Dialog-title': string;
+
+  'navigation': string;
 
   'permissionBadge': string;
 

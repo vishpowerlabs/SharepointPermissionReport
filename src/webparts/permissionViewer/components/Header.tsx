@@ -7,8 +7,7 @@ import { IReadonlyTheme } from '@microsoft/sp-component-base';
 
 export interface IHeaderProps {
     onRefresh: () => void;
-    onPlayDemo?: () => void;
-    isDemoRunning?: boolean;
+
     isLoading: boolean;
     themeVariant: IReadonlyTheme | undefined;
     opacity?: number;
@@ -55,32 +54,7 @@ export const Header: React.FunctionComponent<IHeaderProps> = (props) => {
 
 
             <div style={{ display: 'flex', gap: '10px' }}>
-                <DefaultButton
-                    iconProps={{ iconName: 'Play' }}
-                    onClick={props.onPlayDemo}
-                    disabled={props.isDemoRunning || props.isLoading}
-                    title="Play Demo"
-                    styles={{
-                        root: {
-                            background: 'rgba(255,255,255,0.2)',
-                            border: '1px solid rgba(255,255,255,0.3)',
-                            color: '#ffffff',
-                            borderRadius: '4px',
-                            minWidth: '40px',
-                            padding: 0,
-                        },
-                        rootHovered: {
-                            background: 'rgba(255,255,255,0.3)',
-                            color: '#ffffff'
-                        },
-                        icon: { color: '#ffffff' },
-                        rootDisabled: {
-                            background: 'rgba(255,255,255,0.1)',
-                            color: 'rgba(255,255,255,0.5)',
-                            borderColor: 'transparent'
-                        }
-                    }}
-                />
+
                 <DefaultButton
                     iconProps={refreshIcon}
                     onClick={props.onRefresh}

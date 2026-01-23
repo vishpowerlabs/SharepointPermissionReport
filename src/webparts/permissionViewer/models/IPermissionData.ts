@@ -58,3 +58,10 @@ export interface IItemPermission {
     FileSystemObjectType: number; // 0=File, 1=Folder
     RoleAssignments: IRoleAssignment[];
 }
+
+export interface ISharingInfo {
+    documentName: string;
+    documentUrl: string;
+    sharedWith: string[]; // e.g. ["someone@gmail.com", "Everyone"]
+    linkType: string; // e.g. "Anonymous", "Organization", "Specific People"
+}

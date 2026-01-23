@@ -1,5 +1,5 @@
 import { IPermissionService } from './IPermissionService';
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo } from '../models/IPermissionData';
 
 export class MockPermissionService implements IPermissionService {
 
@@ -124,5 +124,35 @@ export class MockPermissionService implements IPermissionService {
             ];
         }
         return [];
+    }
+
+    public async getExternalUsers(): Promise<IUser[]> {
+        return [
+            { Id: 201, Title: "Guest User 1", Email: "guest1@partner.com", LoginName: "i:0#.f|membership|guest1@partner.com", PrincipalType: 1, IsHiddenInUI: false },
+            { Id: 202, Title: "Vendor Contact", Email: "vendor@contractor.com", LoginName: "i:0#.f|membership|vendor@contractor.com", PrincipalType: 1, IsHiddenInUI: false }
+        ];
+    }
+
+    public async getSharingLinks(): Promise<ISharingInfo[]> {
+        return [
+            {
+                documentName: "Q1 Financials.xlsx",
+                documentUrl: "/sites/marketing/Shared Documents/Q1 Financials.xlsx",
+                sharedWith: ["guest1@partner.com", "finance@otherorg.com"],
+                linkType: "Specific People"
+            },
+            {
+                documentName: "Brand Guidelines.pdf",
+                documentUrl: "/sites/marketing/Shared Documents/Brand Guidelines.pdf",
+                sharedWith: ["Everyone in Organization"],
+                linkType: "Organization"
+            }
+        ];
+    }
+
+    public async getOrphanedUsers(): Promise<IUser[]> {
+        return [
+            { Id: 401, Title: "Orphaned User", Email: "", LoginName: "i:0#.w|domain\\orphaned", PrincipalType: 1, IsHiddenInUI: false }
+        ];
     }
 }
