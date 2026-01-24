@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { IRoleAssignment } from '../models/IPermissionData';
+import { IRoleAssignment, IGroup } from '../models/IPermissionData';
 import { UserPersona } from './UserPersona';
 import { PermissionBadge } from './PermissionBadge';
 import { DetailsList, IColumn, SelectionMode, DetailsListLayoutMode } from '@fluentui/react/lib/DetailsList';
@@ -14,6 +14,7 @@ export interface ISitePermissionsProps {
     contentFontSize?: string;
     onRemovePermission?: (principalId: number, principalName: string) => void;
     onRemoveFromGroup?: (groupId: number, userId: number, userName: string) => void;
+    siteGroups?: IGroup[];
 }
 
 const UserGroupCell: React.FunctionComponent<{
@@ -23,11 +24,21 @@ const UserGroupCell: React.FunctionComponent<{
     fontSize?: string;
     onRemovePermission?: (principalId: number, principalName: string) => void;
     onRemoveFromGroup?: (groupId: number, userId: number, userName: string) => void;
-}> = ({ item, expandedGroups, onToggle, fontSize, onRemovePermission, onRemoveFromGroup }) => {
+    siteGroups?: IGroup[];
+}> = ({ item, expandedGroups, onToggle, fontSize, onRemovePermission, onRemoveFromGroup, siteGroups }) => {
     const isGroup = item.Member.PrincipalType === 8; // Only SharePoint Groups are expandable
     const isUser = item.Member.PrincipalType === 1;
     const isExpanded = expandedGroups.has(item.Member.Id);
     const depth = item.depth || 0;
+
+    // Check for empty group
+    let isEmptyGroup = false;
+    if (isGroup && siteGroups) {
+        const groupInfo = siteGroups.find(g => g.Id === item.Member.Id);
+        if (groupInfo && groupInfo.UserCount === 0) {
+            isEmptyGroup = true;
+        }
+    }
 
     const handleDelete = () => {
         if (depth === 0 && onRemovePermission) {
@@ -53,11 +64,24 @@ const UserGroupCell: React.FunctionComponent<{
                         Loading...
                     </div>
                 ) : (
-                    <UserPersona
-                        user={item.Member}
-                        secondaryText={depth > 0 ? 'Member' : undefined}
-                        fontSize={fontSize}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <UserPersona
+                            user={item.Member}
+                            secondaryText={depth > 0 ? 'Member' : undefined}
+                            fontSize={fontSize}
+                        />
+                        {isEmptyGroup && depth === 0 && (
+                            <span style={{
+                                background: '#fde7e9',
+                                color: '#d13438',
+                                fontSize: 10,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                fontWeight: 600,
+                                border: '1px solid #d13438'
+                            }}>Empty</span>
+                        )}
+                    </div>
                 )}
             </div>
             {(
@@ -93,7 +117,7 @@ const renderPrincipalType = (item: any, fontSize?: string) => <PrincipalTypeCell
 const renderPermissionLevel = (item: any, fontSize?: string) => <PermissionLevelCell item={item} fontSize={fontSize} />;
 
 export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (props) => {
-    const { permissions, permissionService, onRemovePermission } = props;
+    const { permissions, permissionService, onRemovePermission, siteGroups } = props;
     const [expandedGroups, setExpandedGroups] = React.useState<Set<number>>(new Set());
     const [groupMembers, setGroupMembers] = React.useState<{ [key: number]: IRoleAssignment[] }>({});
     const [loadingGroups, setLoadingGroups] = React.useState<Set<number>>(new Set());
@@ -173,8 +197,9 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
             fontSize={props.contentFontSize}
             onRemovePermission={onRemovePermission}
             onRemoveFromGroup={props.onRemoveFromGroup}
+            siteGroups={siteGroups}
         />
-    ), [expandedGroups, toggleGroup, props.contentFontSize, onRemovePermission, props.onRemoveFromGroup]);
+    ), [expandedGroups, toggleGroup, props.contentFontSize, onRemovePermission, props.onRemoveFromGroup, siteGroups]);
 
     const columns: IColumn[] = React.useMemo(() => [
         {

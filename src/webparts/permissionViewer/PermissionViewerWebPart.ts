@@ -35,6 +35,8 @@ export interface IPermissionViewerWebPartProps {
     showSharingLinks: boolean;
     showOrphanedUsers: boolean;
     showSecurityGovernanceTab: boolean;
+    navLayout: 'left' | 'top';
+    storageFormat: 'Auto' | 'MB' | 'GB' | 'TB';
 }
 
 
@@ -88,7 +90,9 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                 showExternalUserAudit: this.properties.showExternalUserAudit,
                 showSharingLinks: this.properties.showSharingLinks,
                 showOrphanedUsers: this.properties.showOrphanedUsers,
-                showSecurityGovernanceTab: this.properties.showSecurityGovernanceTab
+                showSecurityGovernanceTab: this.properties.showSecurityGovernanceTab,
+                navLayout: this.properties.navLayout || 'left', // Default to left
+                storageFormat: this.properties.storageFormat || 'Auto'
             }
         );
 
@@ -112,10 +116,24 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                     },
                     groups: [
                         {
-                            groupName: "Settings",
+                            groupName: "General & Appearance",
                             groupFields: [
                                 PropertyPaneTextField('webPartTitle', {
                                     label: "Web Part Title"
+                                }),
+                                PropertyPaneTextField('description', {
+                                    label: "Description"
+                                }),
+                                PropertyPaneToggle('showComponentHeader', {
+                                    label: "Show Web Part Header",
+                                    checked: true
+                                }),
+                                PropertyPaneDropdown('navLayout', {
+                                    label: "Navigation Layout",
+                                    options: [
+                                        { key: 'left', text: 'Left Navigation' },
+                                        { key: 'top', text: 'Top Header Tabs' }
+                                    ]
                                 }),
                                 PropertyPaneDropdown('webPartTitleFontSize', {
                                     label: "Web Part Title Font Size",
@@ -135,18 +153,40 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                                         { key: '18px', text: 'Extra Large (18px)' }
                                     ]
                                 }),
-                                PropertyPaneTextField('description', {
-                                    label: "Description"
+                                PropertyPaneDropdown('buttonFontSize', {
+                                    label: "Button Font Size",
+                                    options: [
+                                        { key: '10px', text: 'Small (10px)' },
+                                        { key: '12px', text: 'Medium (12px)' },
+                                        { key: '14px', text: 'Large (14px)' },
+                                        { key: '16px', text: 'Extra Large (16px)' },
+                                        { key: '18px', text: 'Huge (18px)' }
+                                    ]
                                 }),
                                 PropertyPaneSlider('headerOpacity', {
                                     label: "Header Opacity",
                                     min: 0,
                                     max: 100,
                                     value: 100
-                                }),
+                                })
+                            ]
+                        },
+                        {
+                            groupName: "Data & Statistics",
+                            groupFields: [
                                 PropertyPaneToggle('showStats', {
                                     label: "Show Statistics Cards",
                                     checked: true
+                                }),
+                                PropertyPaneDropdown('storageFormat', {
+                                    label: "Storage Display Format",
+                                    options: [
+                                        { key: 'Auto', text: 'Auto (Best fit)' },
+                                        { key: 'MB', text: 'Megabytes (MB)' },
+                                        { key: 'GB', text: 'Gigabytes (GB)' },
+                                        { key: 'TB', text: 'Terabytes (TB)' }
+                                    ],
+                                    selectedKey: 'Auto'
                                 }),
                                 PropertyFieldMultiSelect('excludedLists', {
                                     key: 'excludedLists',
@@ -166,29 +206,15 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                                     ],
                                     selectedKeys: this.properties.excludedLists
                                 }),
-                                PropertyPaneToggle('showComponentHeader', {
-                                    label: "Show Web Part Header",
-                                    checked: true
-                                }),
-                                PropertyPaneDropdown('buttonFontSize', {
-                                    label: "Button Font Size",
-                                    options: [
-                                        { key: '10px', text: 'Small (10px)' },
-                                        { key: '12px', text: 'Medium (12px)' },
-                                        { key: '14px', text: 'Large (14px)' },
-                                        { key: '16px', text: 'Extra Large (16px)' },
-                                        { key: '18px', text: 'Huge (18px)' }
-                                    ]
-                                }),
-                                PropertyPaneToggle('simulateAccessDenied', {
-                                    label: "Simulate Access Denied (For Testing)",
-                                    checked: false
-                                }),
                                 PropertyPaneToggle('useMockData', {
                                     label: "Use Mock Data",
                                     checked: false,
                                     onText: "Mock",
                                     offText: "Production"
+                                }),
+                                PropertyPaneToggle('simulateAccessDenied', {
+                                    label: "Simulate Access Denied (For Testing)",
+                                    checked: false
                                 })
                             ]
                         },

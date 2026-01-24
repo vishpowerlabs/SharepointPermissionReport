@@ -18,6 +18,7 @@ export interface IGroup {
     PrincipalType?: number; // 8 for SP Group, 4 for Security Group
     OwnerTitle: string;
     Users?: IUser[];
+    UserCount: number; // Mandatory now to avoid displaying issues
 }
 
 export interface IRoleDefinition {
@@ -43,6 +44,8 @@ export interface IListInfo {
     ServerRelativeUrl: string;
     HasUniqueRoleAssignments: boolean;
     EntityTypeName: string;
+    TotalSize?: number;
+    LastItemModifiedDate?: string;
 }
 
 export interface ISiteStats {
@@ -64,4 +67,21 @@ export interface ISharingInfo {
     documentUrl: string;
     sharedWith: string[]; // e.g. ["someone@gmail.com", "Everyone"]
     linkType: string; // e.g. "Anonymous", "Organization", "Specific People"
+}
+
+export interface ISiteUsage {
+    storageUsed: number;
+    storageQuota: number;
+    usagePercentage: number;
+    lastItemModifiedDate: string;
+}
+
+export interface IRoleDefinitionDetail {
+    Id: number;
+    Name: string;
+    Description: string;
+    BasePermissions: { High: number; Low: number; };
+    Order: number;
+    Hidden: boolean;
+    RoleTypeKind: number;
 }

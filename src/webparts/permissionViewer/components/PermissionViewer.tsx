@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { Nav, INavLinkGroup } from '@fluentui/react/lib/Nav';
+import { Pivot, PivotItem } from '@fluentui/react/lib/Pivot';
 import { DefaultButton, PrimaryButton } from '@fluentui/react/lib/Button';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
-import { PermissionServiceImpl } from '../services/PermissionService';
+import { PermissionServiceNew } from '../services/PermissionServiceNew';
 import { MockPermissionService } from '../services/MockPermissionService';
 import { IPermissionService } from '../services/IPermissionService';
 import { Header } from './Header';
@@ -17,10 +18,13 @@ import { CheckAccess } from './CheckAccess';
 import { SiteAdmins } from './SiteAdmins';
 import { SiteGroups } from './SiteGroups';
 import { SecurityGovernance } from './SecurityGovernance';
-import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup } from '../models/IPermissionData';
+import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup, ISiteUsage } from '../models/IPermissionData';
 import { exportSitePermissions, exportListPermissions, exportDeepScanResults } from '../utils/CsvExport';
-import { Dialog, DialogType, DialogFooter, MessageBar, MessageBarType } from '@fluentui/react';
+
+import { Dialog, DialogType, DialogFooter, MessageBar, MessageBarType, Panel, PanelType, Checkbox } from '@fluentui/react';
 import styles from './PermissionViewer.module.scss';
+import { Icon } from '@fluentui/react/lib/Icon';
+import { formatBytes } from '../utils/FormatUtils';
 
 export interface IPermissionViewerProps {
     spHttpClient: SPHttpClient;
@@ -41,6 +45,8 @@ export interface IPermissionViewerProps {
     showSharingLinks?: boolean;
     showOrphanedUsers?: boolean;
     showSecurityGovernanceTab?: boolean;
+    navLayout?: 'left' | 'top';
+    storageFormat?: 'Auto' | 'MB' | 'GB' | 'TB';
 }
 
 const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props) => {
@@ -88,13 +94,29 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const [hasAccess, setHasAccess] = React.useState<boolean | null>(null); // null = checking
     const [accessContacts, setAccessContacts] = React.useState<IUser[]>([]);
 
+    // Unique Perms Panel State
+    const [isUniquePermsPanelOpen, setIsUniquePermsPanelOpen] = React.useState<boolean>(false);
+
+    // Site Details State
+    // Site Details used to be here but was unused
+    const [siteUsage, setSiteUsage] = React.useState<ISiteUsage | null>(null);
+
+    // Groups Panel State
+    const [isGroupsPanelOpen, setIsGroupsPanelOpen] = React.useState<boolean>(false);
+    const [expandedGroupId, setExpandedGroupId] = React.useState<number | null>(null);
+    const [groupMembers, setGroupMembers] = React.useState<{ [groupId: number]: IUser[] }>({});
+    const [showEmptyGroupsOnly, setShowEmptyGroupsOnly] = React.useState<boolean>(false);
+
+    // Storage Panel State
+    const [isStoragePanelOpen, setIsStoragePanelOpen] = React.useState<boolean>(false);
+
     React.useEffect(() => {
         let service: IPermissionService;
         if (props.useMockData) {
             console.log("Using Mock Data");
             service = new MockPermissionService();
         } else {
-            service = new PermissionServiceImpl(props.spHttpClient, props.webUrl);
+            service = new PermissionServiceNew(props.spHttpClient, props.webUrl);
         }
         setPermissionService(service);
         checkAccessAndLoad(service);
@@ -182,6 +204,15 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         setSitePermissions(sitePerms);
         setFilteredSitePermissions(sitePerms);
 
+        // Load Site Details (Check uniqueness)
+        // Load Site Details (Check uniqueness) - Call service but don't store unused state
+        await service.getSiteDetails();
+        // setSiteDetails(details); -> Unused
+
+        // Load Site Usage
+        const usage = await service.getSiteUsage();
+        setSiteUsage(usage);
+
         // Load stats
         const siteStats = await service.getSiteStats();
 
@@ -194,8 +225,21 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
         setStats({
             ...siteStats,
-            uniquePermissionsCount: uniqueListsCount + (sitePerms.length > 0 ? 1 : 0)
+            uniquePermissionsCount: uniqueListsCount
         });
+
+        // Fallback for Storage Usage if API returned 0
+        if (usage.storageUsed === 0 && listsData.length > 0) {
+            const totalListBytes = listsData.reduce((acc, list) => acc + (list.TotalSize || 0), 0);
+            if (totalListBytes > 0) {
+                console.log("Using Calculated Storage Fallback:", totalListBytes);
+                setSiteUsage({
+                    ...usage,
+                    storageUsed: totalListBytes
+                    // Keep quota as passed from API (likely 0 if failed, but we can't guess quota)
+                });
+            }
+        }
 
         // Load Site Admins
         setIsLoadingAdmins(true);
@@ -231,12 +275,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         setIsLoading(false);
     };
 
-    const handleRefresh = () => {
-        if (permissionService) {
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
-            loadData(permissionService);
-        }
-    };
+    // handleRefresh removed as unused
 
     // ... (existing handlers)
 
@@ -245,7 +284,6 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             <div className={styles.permissionViewer}>
                 <div className={styles.webpartContainer}>
                     <Header
-                        onRefresh={handleRefresh}
                         isLoading={isLoading}
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity ?? 100}
@@ -322,17 +360,21 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         }
     };
 
+    const showRemoveListPermissionConfirm = (listId: string, principalId: number, principalName: string, resolve: (value: boolean | PromiseLike<boolean>) => void) => {
+        setDeleteConfirmState({
+            isOpen: true,
+            title: `Remove Permissions?`,
+            subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this list?`,
+            onConfirm: () => { void executeRemoveListPermission(listId, principalId, resolve); },
+            onCancel: () => {
+                resolve(false);
+            }
+        });
+    };
+
     const handleRemoveListPermission = (listId: string, principalId: number, principalName: string): Promise<boolean> => {
         return new Promise<boolean>((resolve) => {
-            setDeleteConfirmState({
-                isOpen: true,
-                title: `Remove Permissions?`,
-                subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this list?`,
-                onConfirm: () => { void executeRemoveListPermission(listId, principalId, resolve); },
-                onCancel: () => {
-                    resolve(false);
-                }
-            });
+            showRemoveListPermissionConfirm(listId, principalId, principalName, resolve);
         });
     };
 
@@ -346,12 +388,16 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         });
     };
 
-    const updateDeepScanItemsAfterRemoval = (itemId: number, principalId: number) => {
-        setDeepScanItems(prevItems => prevItems.map(item => {
+    const removePrincipalFromItems = (items: IItemPermission[], itemId: number, principalId: number): IItemPermission[] => {
+        return items.map(item => {
             if (item.Id !== itemId) return item;
             const newRoles = item.RoleAssignments.filter(ra => ra.PrincipalId !== principalId);
             return { ...item, RoleAssignments: newRoles };
-        }));
+        });
+    };
+
+    const updateDeepScanItemsAfterRemoval = (itemId: number, principalId: number) => {
+        setDeepScanItems(prevItems => removePrincipalFromItems(prevItems, itemId, principalId));
     };
 
     const executeRemoveDeepScanItemPermission = async (itemId: number, principalId: number) => {
@@ -408,6 +454,23 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             setErrorMessage("An unexpected error occurred.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const toggleGroupExpansion = async (groupId: number) => {
+        if (expandedGroupId === groupId) {
+            setExpandedGroupId(null);
+            return;
+        }
+
+        setExpandedGroupId(groupId);
+        if (!groupMembers[groupId] && permissionService) {
+            try {
+                const members = await permissionService.getGroupMembers(groupId);
+                setGroupMembers(prev => ({ ...prev, [groupId]: members }));
+            } catch (error) {
+                console.error("Error loading group members", error);
+            }
         }
     };
 
@@ -548,30 +611,58 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity}
                         isLoading={isLoading}
-                        onRefresh={handleRefresh}
 
                     />
                 )}
 
-                <div className={styles.layoutContainer}>
-                    <div className={styles.navigation}>
-                        <Nav
-                            groups={navGroups}
-                            selectedKey={activeTab}
-                            styles={{
-                                root: {
-                                    width: '100%',
-                                    height: '100%',
-                                    boxSizing: 'border-box',
-                                    border: '1px solid transparent',
-                                    overflowY: 'auto'
-                                }
-                            }}
-                        />
+                <div className={props.navLayout === 'top' ? styles.layoutContainerTop : styles.layoutContainer}>
+                    <div className={props.navLayout === 'top' ? styles.navigationTop : styles.navigation}>
+                        {props.navLayout === 'top' ? (
+                            <Pivot
+                                selectedKey={activeTab}
+                                onLinkClick={(item) => {
+                                    if (item?.props.itemKey) setActiveTab(item.props.itemKey);
+                                }}
+                                styles={{
+                                    root: { paddingLeft: 16, paddingTop: 8 }
+                                }}
+                            >
+                                <PivotItem headerText="Site Permissions" itemKey="site" itemIcon="Shield" />
+                                <PivotItem headerText="Lists & Libraries" itemKey="lists" itemIcon="List" />
+                                {(props.showSecurityGovernanceTab !== false) && <PivotItem headerText="Security & Governance" itemKey="governance" itemIcon="SecurityGroup" />}
+                                <PivotItem headerText="Site Groups" itemKey="groups" itemIcon="Group" />
+                                <PivotItem headerText="Check Access" itemKey="check_access" itemIcon="UserOptional" />
+                                <PivotItem headerText="Site Admins" itemKey="admins" itemIcon="Admin" />
+                            </Pivot>
+                        ) : (
+                            <Nav
+                                groups={navGroups}
+                                selectedKey={activeTab}
+                                styles={{
+                                    root: {
+                                        width: '100%',
+                                        height: '100%',
+                                        boxSizing: 'border-box',
+                                        border: '1px solid transparent',
+                                        overflowY: 'auto'
+                                    }
+                                }}
+                            />
+                        )}
                     </div>
 
                     <div className={styles.mainCanvas}>
-                        {(props.showStats !== false) && <StatsCards stats={stats} highlight={false} />}
+                        {(props.showStats !== false) && (
+                            <StatsCards
+                                stats={stats}
+                                siteUsage={siteUsage || undefined}
+                                highlight={false}
+                                onUniquePermissionsClick={() => setIsUniquePermsPanelOpen(true)}
+                                onGroupsClick={() => setIsGroupsPanelOpen(true)}
+                                onStorageClick={() => setIsStoragePanelOpen(true)}
+                                storageFormat={props.storageFormat}
+                            />
+                        )}
 
                         <div className={styles.toolbar}>
                             {(activeTab === 'site' || activeTab === 'lists') && (
@@ -611,6 +702,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                     contentFontSize={props.contentFontSize}
                                     onRemovePermission={handleRemoveSitePermission}
                                     onRemoveFromGroup={handleRemoveFromGroup}
+                                    siteGroups={siteGroups}
                                 />
                             )}
 
@@ -721,7 +813,6 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         )}
                     </Dialog>
 
-                    {/* Delete Confirmation Dialog */}
                     <Dialog
                         hidden={!deleteConfirmState.isOpen}
                         onDismiss={() => setDeleteConfirmState(prev => ({ ...prev, isOpen: false }))}
@@ -751,9 +842,229 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                             />
                         </DialogFooter>
                     </Dialog>
-                </div>
-            </div>
-        </div>
+
+                    <Panel
+                        isOpen={isUniquePermsPanelOpen}
+                        onDismiss={() => setIsUniquePermsPanelOpen(false)}
+                        isLightDismiss={true}
+                        type={PanelType.medium}
+                        headerText="Unique Permissions Details"
+                        closeButtonAriaLabel="Close"
+                    >
+                        <p>The following objects have unique permissions (broken inheritance):</p>
+
+                        <div className={styles.permissionTable} style={{ marginTop: 20, border: 'none' }}>
+                            {/* Lists */}
+                            {lists.filter(l => l.HasUniqueRoleAssignments).map(list => (
+                                <div key={list.Id} style={{
+                                    padding: '12px 0',
+                                    borderBottom: '1px solid #eee',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 12
+                                }}>
+                                    <Icon iconName={list.ItemType === 'Library' ? 'DocLibrary' : 'List'} style={{ color: '#0078d4', fontSize: 16 }} />
+                                    <div>
+                                        <div style={{ fontWeight: 600 }}>{list.Title}</div>
+                                        <div style={{ fontSize: 12, color: '#666' }}>{list.ItemType} • {list.ItemCount} items</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Panel>
+
+                    <Panel
+                        isOpen={isGroupsPanelOpen}
+                        onDismiss={() => {
+                            setIsGroupsPanelOpen(false);
+                            setExpandedGroupId(null);
+                        }}
+                        isLightDismiss={true}
+                        type={PanelType.medium}
+                        headerText="Site Groups"
+                        closeButtonAriaLabel="Close"
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                            <p style={{ margin: 0 }}>All groups in this site ({siteGroups.length} total):</p>
+                            <Checkbox
+                                label="Show Empty Groups Only"
+                                checked={showEmptyGroupsOnly}
+                                onChange={(_, checked) => setShowEmptyGroupsOnly(!!checked)}
+                                styles={{ root: { marginBottom: 0 } }}
+                            />
+                        </div>
+
+                        <div className={styles.permissionTable} style={{ marginTop: 20, border: 'none' }}>
+                            {siteGroups
+                                .filter(g => !showEmptyGroupsOnly || (g.UserCount === 0 || (g.Users?.length === 0)))
+                                .map(group => (
+                                    <div key={group.Id} style={{ marginBottom: 10 }}>
+                                        <button
+                                            style={{
+                                                padding: '12px',
+                                                border: 'none',
+                                                borderBottom: '1px solid #eee',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 12,
+                                                cursor: 'pointer',
+                                                background: expandedGroupId === group.Id ? '#f3f2f1' : 'transparent',
+                                                width: '100%',
+                                                textAlign: 'left',
+                                                fontFamily: 'inherit'
+                                            }}
+                                            type="button"
+                                            onClick={() => { void toggleGroupExpansion(group.Id); }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    void toggleGroupExpansion(group.Id);
+                                                }
+                                            }}
+                                        >
+                                            <Icon iconName={expandedGroupId === group.Id ? "ChevronDown" : "ChevronRight"} style={{ fontSize: 12 }} />
+                                            <Icon iconName="Group" style={{ color: '#8764b8', fontSize: 16 }} />
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <div style={{ fontWeight: 600 }}>{group.Title}</div>
+                                                    {group.UserCount === 0 && (
+                                                        <span style={{
+                                                            background: '#fde7e9',
+                                                            color: '#d13438',
+                                                            fontSize: 10,
+                                                            padding: '2px 6px',
+                                                            borderRadius: 4,
+                                                            fontWeight: 600,
+                                                            border: '1px solid #d13438'
+                                                        }}>Empty</span>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: 12, color: '#666' }}>
+                                                    {group.UserCount === undefined ? 'Click to load members' : `${group.UserCount} members`}
+                                                    {group.Description ? ` • ${group.Description}` : ''}
+                                                </div>
+                                            </div>
+                                        </button>
+
+                                        {expandedGroupId === group.Id && groupMembers[group.Id] && (
+                                            <div style={{ paddingLeft: 40, paddingTop: 8, paddingBottom: 8 }}>
+                                                {groupMembers[group.Id].length === 0 ? (
+                                                    <div style={{ fontSize: 12, color: '#666', fontStyle: 'italic' }}>No members</div>
+                                                ) : (
+                                                    groupMembers[group.Id].map(member => (
+                                                        <div key={member.Id} style={{
+                                                            padding: '8px 0',
+                                                            borderBottom: '1px solid #f3f2f1',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 8
+                                                        }}>
+                                                            <Icon iconName="Contact" style={{ fontSize: 14, color: '#605e5c' }} />
+                                                            <div>
+                                                                <div style={{ fontSize: 13 }}>{member.Title}</div>
+                                                                <div style={{ fontSize: 11, color: '#666' }}>{member.Email}</div>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                        </div>
+                    </Panel>
+
+                    <Panel
+                        isOpen={isStoragePanelOpen}
+                        onDismiss={() => setIsStoragePanelOpen(false)}
+                        isLightDismiss={true}
+                        type={PanelType.medium}
+                        headerText="Storage Metrics"
+                        closeButtonAriaLabel="Close"
+                    >
+                        {siteUsage && (
+                            <div style={{ marginBottom: 20, padding: '15px', background: '#f8f9fa', borderRadius: '4px' }}>
+                                {siteUsage.storageQuota > 0 ? (
+                                    <>
+                                        <div style={{ fontSize: 24, fontWeight: 600, color: '#0078d4' }}>
+                                            {formatBytes(siteUsage.storageQuota - siteUsage.storageUsed, 2, props.storageFormat)} free
+                                        </div>
+                                        <div style={{ color: '#666', marginBottom: 10 }}>
+                                            of {formatBytes(siteUsage.storageQuota, 2, props.storageFormat)} total quota
+                                        </div>
+                                        <div style={{ height: 8, background: '#e1dfdd', borderRadius: 4, overflow: 'hidden' }}>
+                                            <div style={{
+                                                height: '100%',
+                                                width: `${(siteUsage.usagePercentage * 100).toFixed(1)}%`,
+                                                background: siteUsage.usagePercentage > 0.9 ? '#d13438' : '#0078d4'
+                                            }} />
+                                        </div>
+                                        <div style={{ textAlign: 'right', fontSize: 11, marginTop: 4, color: '#666' }}>
+                                            {(siteUsage.usagePercentage * 100).toFixed(2)}% used
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div style={{ fontSize: 24, fontWeight: 600, color: '#0078d4' }}>
+                                            {formatBytes(siteUsage.storageUsed, 2, props.storageFormat)} used
+                                        </div>
+                                        <div style={{ color: '#666', marginBottom: 10 }}>
+                                            (Total Quota Unknown)
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        <p>Storage breakdown by list/library (top items):</p>
+
+                        <table className={styles.permissionTable} style={{ marginTop: 20 }}>
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '40%' }}>Name</th>
+                                    <th style={{ width: '20%' }}>Total Size</th>
+                                    <th style={{ width: '20%' }}>% of Site</th>
+                                    <th style={{ width: '20%' }}>Last Modified</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[...lists]
+                                    .sort((a, b) => (b.TotalSize || 0) - (a.TotalSize || 0))
+                                    .map(list => {
+                                        const size = list.TotalSize || 0;
+                                        const percent = siteUsage && siteUsage.storageUsed > 0 ? (size / siteUsage.storageUsed) * 100 : 0;
+                                        return (
+                                            <tr key={list.Id}>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <Icon iconName={list.ItemType === 'Library' ? 'DocLibrary' : 'List'} style={{ color: '#0078d4' }} />
+                                                        <div>
+                                                            <div style={{ fontWeight: 600 }}>{list.Title}</div>
+                                                            <div style={{ fontSize: 11, color: '#666' }}>{list.ItemCount} items</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>{formatBytes(size, 2, props.storageFormat)}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <div style={{ flex: 1, height: 4, background: '#f3f2f1', borderRadius: 2, maxWidth: 50 }}>
+                                                            <div style={{ height: '100%', width: `${Math.min(percent, 100)}%`, background: '#0078d4' }} />
+                                                        </div>
+                                                        <span style={{ fontSize: 11 }}>{percent < 0.1 && percent > 0 ? '<0.1' : percent.toFixed(1)}%</span>
+                                                    </div>
+                                                </td>
+                                                <td style={{ fontSize: 12 }}>
+                                                    {list.LastItemModifiedDate ? new Date(list.LastItemModifiedDate).toLocaleDateString() : '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                            </tbody>
+                        </table>
+                    </Panel>
+                </div >
+            </div >
+        </div >
     );
 };
 

@@ -27,7 +27,8 @@
                 "showExternalUserAudit": true,
                 "showSharingLinks": true,
                 "showOrphanedUsers": true,
-                "showSecurityGovernanceTab": true
+                "showSecurityGovernanceTab": true,
+                "navLayout": "left"
             }
         }
     ]

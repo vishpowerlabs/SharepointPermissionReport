@@ -1,5 +1,5 @@
 import { IPermissionService } from './IPermissionService';
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo, ISiteUsage, IRoleDefinitionDetail } from '../models/IPermissionData';
 
 export class MockPermissionService implements IPermissionService {
 
@@ -62,11 +62,11 @@ export class MockPermissionService implements IPermissionService {
 
     public async getSiteGroups(): Promise<IGroup[]> {
         return [
-            { Id: 1, Title: "Marketing Owners", LoginName: "owners", Description: "Site Owners", OwnerTitle: "System Account", IsHiddenInUI: false, PrincipalType: 8 },
-            { Id: 2, Title: "Marketing Members", LoginName: "members", Description: "Site Members", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 },
-            { Id: 3, Title: "Marketing Visitors", LoginName: "visitors", Description: "Site Visitors", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 },
-            { Id: 10, Title: "Design Team", LoginName: "design", Description: "Designers and Creatives", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 },
-            { Id: 11, Title: "Security Audit Team", LoginName: "sec_audit", Description: "External Security Auditors", OwnerTitle: "Active Directory", IsHiddenInUI: false, PrincipalType: 4 }
+            { Id: 1, Title: "Marketing Owners", LoginName: "owners", Description: "Site Owners", OwnerTitle: "System Account", IsHiddenInUI: false, PrincipalType: 8, UserCount: 1 },
+            { Id: 2, Title: "Marketing Members", LoginName: "members", Description: "Site Members", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8, UserCount: 3 },
+            { Id: 3, Title: "Marketing Visitors", LoginName: "visitors", Description: "Site Visitors", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8, UserCount: 0 },
+            { Id: 10, Title: "Design Team", LoginName: "design", Description: "Designers and Creatives", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8, UserCount: 5 },
+            { Id: 11, Title: "Security Audit Team", LoginName: "sec_audit", Description: "External Security Auditors", OwnerTitle: "Active Directory", IsHiddenInUI: false, PrincipalType: 4, UserCount: 0 }
         ];
     }
 
@@ -120,7 +120,7 @@ export class MockPermissionService implements IPermissionService {
         // Mock: John Doe is in "Marketing Members" (Id 2)
         if (loginName === "johnd" || loginName.includes("john")) {
             return [
-                { Id: 2, Title: "Marketing Members", LoginName: "members", Description: "Site Members", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8 }
+                { Id: 2, Title: "Marketing Members", LoginName: "members", Description: "Site Members", OwnerTitle: "Marketing Owners", IsHiddenInUI: false, PrincipalType: 8, UserCount: 3 }
             ];
         }
         return [];
@@ -154,5 +154,38 @@ export class MockPermissionService implements IPermissionService {
         return [
             { Id: 401, Title: "Orphaned User", Email: "", LoginName: String.raw`i:0#.w|domain\orphaned`, PrincipalType: 1, IsHiddenInUI: false }
         ];
+    }
+
+    public async getSiteDetails(): Promise<{ Title: string; Url: string; HasUniqueRoleAssignments: boolean }> {
+        return {
+            Title: "Marketing Site",
+            Url: "https://contoso.sharepoint.com/sites/marketing",
+            HasUniqueRoleAssignments: true
+        };
+    }
+
+    public async getSiteUsage(): Promise<ISiteUsage> {
+        return {
+            storageUsed: 40, // 40%
+            storageQuota: 26214400, // 25 TB in MB
+            usagePercentage: 0.4,
+            lastItemModifiedDate: new Date().toISOString()
+        };
+    }
+
+    public async getRoleDefinitions(): Promise<IRoleDefinitionDetail[]> {
+        return [
+            { Id: 1, Name: "Full Control", Description: "Has full control.", BasePermissions: { High: 0, Low: 65535 }, Order: 1, Hidden: false, RoleTypeKind: 5 },
+            { Id: 2, Name: "Design", Description: "Can view, add, update, delete, approve, and customize.", BasePermissions: { High: 0, Low: 0 }, Order: 32, Hidden: false, RoleTypeKind: 4 },
+            { Id: 3, Name: "Edit", Description: "Can add, edit and delete lists; can view, add, update, and delete list items and documents.", BasePermissions: { High: 0, Low: 0 }, Order: 48, Hidden: false, RoleTypeKind: 6 },
+            { Id: 4, Name: "Contribute", Description: "Can view, add, update, and delete list items and documents.", BasePermissions: { High: 0, Low: 0 }, Order: 64, Hidden: false, RoleTypeKind: 3 },
+            { Id: 5, Name: "Read", Description: "Can view pages and list items and download documents.", BasePermissions: { High: 0, Low: 1 }, Order: 128, Hidden: false, RoleTypeKind: 2 },
+        ];
+    }
+
+    public async getUserEffectivePermissions(loginName: string): Promise<string[]> {
+        if (loginName.includes("admin")) return ["FullControl", "ManageWeb", "CreateGroups"];
+        if (loginName.includes("john")) return ["ViewPages", "EditListItems", "ViewListItems"];
+        return ["ViewPages", "ViewListItems"];
     }
 }

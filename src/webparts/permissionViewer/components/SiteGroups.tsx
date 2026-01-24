@@ -4,12 +4,12 @@ import { Link } from '@fluentui/react/lib/Link';
 import { Panel, PanelType } from '@fluentui/react/lib/Panel';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import { MessageBar, MessageBarType } from '@fluentui/react/lib/MessageBar';
-import { SearchBox } from '@fluentui/react/lib/SearchBox';
 import { Stack } from '@fluentui/react/lib/Stack';
 import { Persona, PersonaSize } from '@fluentui/react/lib/Persona';
 import { Text } from '@fluentui/react/lib/Text';
 import { IconButton, PrimaryButton, DefaultButton } from '@fluentui/react/lib/Button';
 import { Dialog, DialogType, DialogFooter } from '@fluentui/react/lib/Dialog';
+import { Checkbox } from '@fluentui/react/lib/Checkbox';
 import { IGroup, IUser } from '../models/IPermissionData';
 import { IPermissionService } from '../services/IPermissionService';
 
@@ -21,12 +21,25 @@ export interface ISiteGroupsProps {
 }
 
 const GroupNameCell: React.FC<{ item: IGroup; fontSize?: string; onClick: (g: IGroup) => void }> = ({ item, fontSize, onClick }) => (
-    <Link
-        onClick={() => onClick(item)}
-        style={{ fontSize, fontWeight: 600 }}
-    >
-        {item.Title}
-    </Link>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Link
+            onClick={() => onClick(item)}
+            style={{ fontSize, fontWeight: 600 }}
+        >
+            {item.Title}
+        </Link>
+        {item.UserCount === 0 && (
+            <span style={{
+                background: '#fde7e9',
+                color: '#d13438',
+                fontSize: 10,
+                padding: '2px 6px',
+                borderRadius: 4,
+                fontWeight: 600,
+                border: '1px solid #d13438'
+            }}>Empty</span>
+        )}
+    </div>
 );
 
 const TextCell: React.FC<{ text: string; fontSize?: string }> = ({ text, fontSize }) => (
@@ -35,6 +48,7 @@ const TextCell: React.FC<{ text: string; fontSize?: string }> = ({ text, fontSiz
 
 export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => {
     const [filteredGroups, setFilteredGroups] = React.useState<IGroup[]>([]);
+    const [showEmptyGroupsOnly, setShowEmptyGroupsOnly] = React.useState<boolean>(false);
 
     // Panel State
     const [isPanelOpen, setIsPanelOpen] = React.useState<boolean>(false);
@@ -51,19 +65,15 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         setFilteredGroups(props.groups);
     }, [props.groups]);
 
-    const onSearch = (newValue: string) => {
-        if (!newValue) {
-            setFilteredGroups(props.groups);
-            return;
+    React.useEffect(() => {
+        let items = props.groups;
+        if (showEmptyGroupsOnly) {
+            items = items.filter(g => g.UserCount === 0 || (g.Users && g.Users.length === 0));
         }
+        setFilteredGroups(items);
+    }, [showEmptyGroupsOnly, props.groups]);
 
-        const lowerQuery = newValue.toLowerCase();
-        const filtered = props.groups.filter(g =>
-            g.Title.toLowerCase().includes(lowerQuery) ||
-            (g.Description?.toLowerCase().includes(lowerQuery))
-        );
-        setFilteredGroups(filtered);
-    };
+
 
     const onGroupClick = (group: IGroup) => {
         setSelectedGroup(group);
@@ -127,6 +137,10 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         <TextCell text={item.OwnerTitle} fontSize={props.contentFontSize} />
     ), [props.contentFontSize]);
 
+    const onRenderUserCount = React.useCallback((item: IGroup) => (
+        <TextCell text={item.UserCount !== undefined ? `${item.UserCount} members` : '-'} fontSize={props.contentFontSize} />
+    ), [props.contentFontSize]);
+
     const columns: IColumn[] = React.useMemo(() => [
         {
             key: 'Title',
@@ -149,22 +163,34 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         {
             key: 'Owner',
             name: 'Group Owner',
-            fieldName: 'OwnerTitle', // Map to OwnerTitle if available, logic might need check in Service
+            fieldName: 'OwnerTitle',
             minWidth: 100,
             isResizable: true,
             onRender: onRenderOwner
+        },
+        {
+            key: 'UserCount',
+            name: 'Members',
+            fieldName: 'UserCount',
+            minWidth: 100,
+            maxWidth: 150,
+            isResizable: true,
+            onRender: onRenderUserCount
         }
-    ], [onRenderGroupName, onRenderDescription, onRenderOwner]);
+    ], [onRenderGroupName, onRenderDescription, onRenderOwner, onRenderUserCount]);
 
     return (
         <div>
             <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 20 }} style={{ marginBottom: 20 }}>
-                <SearchBox
-                    placeholder="Search groups..."
-                    styles={{ root: { width: 300 } }}
-                    onChange={(_, val) => onSearch(val || '')}
+
+                <Checkbox
+                    label="Show Empty Groups Only"
+                    checked={showEmptyGroupsOnly}
+                    onChange={(_, checked) => setShowEmptyGroupsOnly(!!checked)}
                 />
             </Stack>
+
+
 
             {props.isLoading ? (
                 <Spinner size={SpinnerSize.large} label="Loading site groups..." />

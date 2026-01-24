@@ -1,4 +1,4 @@
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo, ISiteUsage, IRoleDefinitionDetail } from '../models/IPermissionData';
 
 export interface IPermissionService {
     getSiteRoleAssignments(): Promise<IRoleAssignment[]>;
@@ -20,4 +20,8 @@ export interface IPermissionService {
     getExternalUsers(): Promise<IUser[]>;
     getSharingLinks(): Promise<ISharingInfo[]>; // Sharing links often appear as users/groups
     getOrphanedUsers(): Promise<IUser[]>;
+    getSiteDetails(): Promise<{ Title: string; Url: string; HasUniqueRoleAssignments: boolean }>;
+    getSiteUsage(): Promise<ISiteUsage>;
+    getRoleDefinitions(): Promise<IRoleDefinitionDetail[]>;
+    getUserEffectivePermissions(loginName: string): Promise<string[]>;
 }

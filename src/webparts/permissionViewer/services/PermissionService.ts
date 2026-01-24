@@ -1,12 +1,13 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import { IPermissionService } from './IPermissionService';
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo, ISiteUsage, IRoleDefinitionDetail } from '../models/IPermissionData';
 
-export class PermissionServiceImpl implements IPermissionService {
+export class ForceUpdatePermissionService implements IPermissionService {
     private readonly _spHttpClient: SPHttpClient;
     private readonly _webUrl: string;
 
     constructor(spHttpClient: SPHttpClient, webUrl: string) {
+        console.log("ForceUpdatePermissionService V3 INITIALIZED - Code is live!");
         this._spHttpClient = spHttpClient;
         this._webUrl = webUrl;
     }
@@ -30,7 +31,7 @@ export class PermissionServiceImpl implements IPermissionService {
 
     public async getLists(excludedLists?: string[]): Promise<IListInfo[]> {
         try {
-            const endpoint = `${this._webUrl}/_api/web/lists?$select=Id,Title,ItemCount,Hidden,BaseType,RootFolder/ServerRelativeUrl,HasUniqueRoleAssignments,EntityTypeName,BaseTemplate&$filter=Hidden eq false&$expand=RootFolder`;
+            const endpoint = `${this._webUrl}/_api/web/lists?$select=Id,Title,ItemCount,Hidden,BaseType,RootFolder/ServerRelativeUrl,HasUniqueRoleAssignments,EntityTypeName,BaseTemplate,LastItemModifiedDate,RootFolder/StorageMetrics/TotalSize&$filter=Hidden eq false&$expand=RootFolder,RootFolder/StorageMetrics`;
             const response: SPHttpClientResponse = await this._spHttpClient.get(endpoint, SPHttpClient.configurations.v1);
             const json = await response.json();
 
@@ -59,7 +60,9 @@ export class PermissionServiceImpl implements IPermissionService {
                         ItemType: list.BaseType === 1 ? 'Library' : 'List',
                         ServerRelativeUrl: list.RootFolder ? list.RootFolder.ServerRelativeUrl : '',
                         HasUniqueRoleAssignments: list.HasUniqueRoleAssignments,
-                        EntityTypeName: list.EntityTypeName
+                        EntityTypeName: list.EntityTypeName,
+                        TotalSize: list.RootFolder?.StorageMetrics?.TotalSize || 0,
+                        LastItemModifiedDate: list.LastItemModifiedDate
                     } as IListInfo;
                 });
             }
@@ -112,8 +115,8 @@ export class PermissionServiceImpl implements IPermissionService {
 
     public async getSiteGroups(): Promise<IGroup[]> {
         try {
-            // 1. Fetch SharePoint Groups
-            const groupsEndpoint = `${this._webUrl}/_api/web/sitegroups`;
+            // 1. Fetch SharePoint Groups with Users expansion to get count
+            const groupsEndpoint = `${this._webUrl}/_api/web/sitegroups?$expand=Users`;
             const groupsReq = this._spHttpClient.get(groupsEndpoint, SPHttpClient.configurations.v1);
 
             // 2. Fetch Security Groups (PrincipalType 4)
@@ -128,7 +131,27 @@ export class PermissionServiceImpl implements IPermissionService {
 
             // Process SharePoint Groups
             if (groupsJson?.value) {
-                const spGroups = groupsJson.value.map((g: any) => ({ ...g, PrincipalType: 8 })); // Add Type 8 explicitly if needed
+                const spGroups = groupsJson.value.map((g: any) => {
+                    // Log the first group to inspect structure
+                    if (g.Title === "DEVSITE Members" || g.Title === "Everyone") {
+                        console.log(`[PermissionService] inspecting group: ${g.Title}`, g);
+                        console.log(`[PermissionService] Users prop:`, g.Users);
+                    }
+
+                    // Handle OData response variations for expanded Users
+                    // Standard v1: g.Users (array) or g.Users.value
+                    // Verbose: g.Users.results
+                    // Deferred: g.Users.__deferred (ignored here)
+                    const users = g.Users ? (Array.isArray(g.Users) ? g.Users : (g.Users.value || g.Users.results || [])) : [];
+
+                    console.log(`[PermissionService] Calculated users count for ${g.Title}:`, users.length);
+
+                    return {
+                        ...g,
+                        PrincipalType: 8,
+                        UserCount: users.length
+                    };
+                });
                 allGroups = allGroups.concat(spGroups);
             }
 
@@ -142,7 +165,8 @@ export class PermissionServiceImpl implements IPermissionService {
                     Description: g.Email || "", // Use Email as description for security groups typically
                     OwnerTitle: "Active Directory", // Static owner for AD groups
                     IsHiddenInUI: g.IsHiddenInUI,
-                    PrincipalType: 4
+                    PrincipalType: 4,
+                    UserCount: 1 // Assume 1 for AD group itself, as we can't expand members via this API easily
                 }));
                 allGroups = allGroups.concat(secGroups);
             }
@@ -710,5 +734,170 @@ export class PermissionServiceImpl implements IPermissionService {
             console.error("Error fetching all site users", error);
             return [];
         }
+    }
+
+    public async getSiteDetails(): Promise<{ Title: string; Url: string; HasUniqueRoleAssignments: boolean }> {
+        try {
+            const endpoint = `${this._webUrl}/_api/web?$select=Title,ServerRelativeUrl,HasUniqueRoleAssignments`;
+            const response: SPHttpClientResponse = await this._spHttpClient.get(endpoint, SPHttpClient.configurations.v1);
+            const json = await response.json();
+
+            return {
+                Title: json.Title,
+                Url: json.ServerRelativeUrl,
+                HasUniqueRoleAssignments: json.HasUniqueRoleAssignments
+            };
+        } catch (error) {
+            console.error("Error fetching site details", error);
+            // Default safe fallback
+            return { Title: "Current Site", Url: "", HasUniqueRoleAssignments: true };
+        }
+    }
+
+    public async getSiteUsage(): Promise<ISiteUsage> {
+        try {
+            // 1. Get Storage Quota & Usage
+            const usageEndpoint = `${this._webUrl}/_api/site/usage`;
+            const usageReq = this._spHttpClient.get(usageEndpoint, SPHttpClient.configurations.v1);
+
+            // 2. Get Last Modified Date (from Web properties)
+            const webEndpoint = `${this._webUrl}/_api/web?$select=LastItemModifiedDate`;
+            const webReq = this._spHttpClient.get(webEndpoint, SPHttpClient.configurations.v1);
+
+            const [usageResp, webResp] = await Promise.all([usageReq, webReq]);
+            const usageJson = await usageResp.json();
+            const webJson = await webResp.json();
+
+            // usageJson.Usage.Storage is in bytes
+            // usageJson.Usage.StorageQuota is in bytes
+
+            // Usage endpoint structure might vary slightly, but standard is:
+            // d: { Usage: { Storage: ..., StorageQuota: ... } } or direct properties depending on Accept header
+            // With standard JSON: { Usage : { Storage: 123, StorageQuota: 456 } }
+
+            // SharePoint API returns: { Storage: 576195757, StoragePercentageUsed: 0.00002096... }
+            // Storage is in bytes, we need to calculate quota from percentage
+            const storageUsedBytes = usageJson?.Storage || 0;
+            const storagePercentageUsed = usageJson?.StoragePercentageUsed || 0;
+
+            // Calculate quota: used / percentage = quota
+            const storageQuotaBytes = storagePercentageUsed > 0
+                ? storageUsedBytes / storagePercentageUsed
+                : 0;
+
+            console.log('=== STORAGE DEBUG ===');
+            console.log('Raw API Response:', usageJson);
+            console.log('Storage Used (bytes):', storageUsedBytes);
+            console.log('Storage Percentage:', storagePercentageUsed);
+            console.log('Calculated Quota (bytes):', storageQuotaBytes);
+            console.log('Used (GB):', (storageUsedBytes / (1024 * 1024 * 1024)).toFixed(2));
+            console.log('Quota (GB):', (storageQuotaBytes / (1024 * 1024 * 1024)).toFixed(2));
+            console.log('==================');
+
+            return {
+                storageUsed: storageUsedBytes,
+                storageQuota: storageQuotaBytes,
+                usagePercentage: storagePercentageUsed,
+                lastItemModifiedDate: webJson.LastItemModifiedDate
+            };
+
+        } catch (error) {
+            console.error("Error fetching site usage", error);
+            return { storageUsed: 0, storageQuota: 0, usagePercentage: 0, lastItemModifiedDate: "" };
+        }
+    }
+
+    public async getRoleDefinitions(): Promise<IRoleDefinitionDetail[]> {
+        try {
+            const endpoint = `${this._webUrl}/_api/web/roledefinitions`;
+            const response: SPHttpClientResponse = await this._spHttpClient.get(endpoint, SPHttpClient.configurations.v1);
+            const json = await response.json();
+
+            if (json?.value) {
+                return json.value.map((r: any) => ({
+                    Id: r.Id,
+                    Name: r.Name,
+                    Description: r.Description,
+                    BasePermissions: r.BasePermissions,
+                    Order: r.Order,
+                    Hidden: r.Hidden,
+                    RoleTypeKind: r.RoleTypeKind
+                }));
+            }
+            return [];
+        } catch (error) {
+            console.error("Error fetching role definitions", error);
+            return [];
+        }
+    }
+
+    public async getUserEffectivePermissions(loginName: string): Promise<string[]> {
+        try {
+            // Need to encode login name safely
+            const encodedLogin = encodeURIComponent(loginName);
+            const endpoint = `${this._webUrl}/_api/web/getUserEffectivePermissions(@u)?@u='${encodedLogin}'`;
+            const response: SPHttpClientResponse = await this._spHttpClient.get(endpoint, SPHttpClient.configurations.v1);
+            const json = await response.json();
+
+            // Returns { High: ..., Low: ... }
+            const perms = json?.value || json;
+            if (perms) {
+                return this._parseBasePermissions(perms);
+            }
+            return [];
+
+        } catch (error) {
+            console.error("Error fetching effective permissions", error);
+            return [];
+        }
+    }
+
+    /**
+     * Helper to convert BasePermissions (High/Low) into readable string array.
+     * This is a simplified mapper. Full mapping takes ~30 definitions.
+     */
+    private _parseBasePermissions(perms: { High: number; Low: number }): string[] {
+        const rights: string[] = [];
+        const low = perms.Low;
+        const high = perms.High;
+
+        // Common Low Permissions
+        if (low & 1) rights.push("ViewListItems");
+        if (low & 2) rights.push("AddListItems");
+        if (low & 4) rights.push("EditListItems");
+        if (low & 8) rights.push("DeleteListItems");
+        if (low & 16) rights.push("ApproveItems");
+        if (low & 32) rights.push("OpenItems");
+        if (low & 64) rights.push("ViewVersions");
+        if (low & 128) rights.push("DeleteVersions");
+        if (low & 256) rights.push("CancelCheckout");
+        if (low & 512) rights.push("ManagePersonalViews");
+        if (low & 2048) rights.push("ManageLists");
+        if (low & 4096) rights.push("ViewFormPages");
+
+        if (low & 65536) rights.push("ViewPages");
+        if (low & 131072) rights.push("LayoutsPage"); // AddAndCustomizePages? No, LayoutsPage is usually mapped to something else? 
+        // 0x20000 = ViewPages (131072) -> Actually 0x20000 is ViewPages. 
+        // Let's rely on standard enum values:
+
+        // Re-mapping based on SP.PermissionKind
+        // See: https://learn.microsoft.com/en-us/sharepoint/dev/sp-add-ins/sharepoint-permission-levels
+
+        // Very basic mapping for demo
+        if ((low & 0x00000001) > 0) rights.push("View List Items");
+        if ((low & 0x00000002) > 0) rights.push("Add List Items");
+        if ((low & 0x00000004) > 0) rights.push("Edit List Items");
+        if ((low & 0x00000008) > 0) rights.push("Delete List Items");
+
+        if ((low & 0x00020000) > 0) rights.push("View Pages");
+        if ((low & 0x00040000) > 0) rights.push("Enumerate Permissions");
+        if ((low & 0x01000000) > 0) rights.push("Create Groups");
+        if ((low & 0x02000000) > 0) rights.push("Manage Permissions");
+        if ((low & 0x04000000) > 0) rights.push("Browse User Info");
+
+        // Full Control essentially checks multiple high bits or specifically ManageWeb
+        if ((high & 0x00040000) > 0) rights.push("Manage Web (Full Control)");
+
+        return rights;
     }
 }

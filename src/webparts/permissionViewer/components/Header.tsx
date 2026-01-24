@@ -6,8 +6,6 @@ import { IReadonlyTheme } from '@microsoft/sp-component-base';
 
 
 export interface IHeaderProps {
-    onRefresh: () => void;
-
     isLoading: boolean;
     themeVariant: IReadonlyTheme | undefined;
     opacity?: number;
@@ -34,8 +32,6 @@ export const Header: React.FunctionComponent<IHeaderProps> = (props) => {
     // Safely handle opacity: strictly check for null/undefined, default to 100.
     const opacity = props.opacity ?? 100;
 
-    const refreshIcon: IIconProps = { iconName: 'Refresh' };
-
     // Default to a standard blue if theme is missing, but theme should be present
     const primaryColor = themeVariant?.palette?.themePrimary || '#0078d4';
 
@@ -51,32 +47,6 @@ export const Header: React.FunctionComponent<IHeaderProps> = (props) => {
             <h1 style={{ fontSize: props.titleFontSize || '24px', fontWeight: 600, margin: 0, color: '#ffffff' }}>
                 {props.title || "📊 SharePoint Permission Viewer"}
             </h1>
-
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-
-                <DefaultButton
-                    iconProps={refreshIcon}
-                    onClick={props.onRefresh}
-                    disabled={props.isLoading}
-                    title="Refresh"
-                    styles={{
-                        root: {
-                            background: 'rgba(255,255,255,0.2)',
-                            border: '1px solid rgba(255,255,255,0.3)',
-                            color: '#ffffff', // Enhance contrast on primary bg
-                            borderRadius: '4px',
-                            minWidth: '40px',
-                            padding: 0,
-                        },
-                        rootHovered: {
-                            background: 'rgba(255,255,255,0.3)',
-                            color: '#ffffff'
-                        },
-                        icon: { color: '#ffffff' }
-                    }}
-                />
-            </div>
         </div>
     );
 };

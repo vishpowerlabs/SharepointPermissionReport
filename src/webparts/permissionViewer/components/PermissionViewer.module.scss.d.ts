@@ -55,6 +55,8 @@ export interface IExportStyles {
 
   'layoutContainer': string;
 
+  'layoutContainerTop': string;
+
   'listCard': string;
 
   'listCardHeader': string;
@@ -76,6 +78,8 @@ export interface IExportStyles {
   'ms-Dialog-title': string;
 
   'navigation': string;
+
+  'navigationTop': string;
 
   'permissionBadge': string;
 

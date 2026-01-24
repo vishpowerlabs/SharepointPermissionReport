@@ -21,11 +21,30 @@
     min-height: 600px; // Ensure min height for side nav
   }
 
+  .layoutContainerTop {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 600px;
+  }
+
   .navigation {
     width: 180px;
     border-right: 1px solid "[theme: neutralLight, default: #e1dfdd]";
     background: "[theme: neutralLighterAlt, default: #faf9f8]";
     flex-shrink: 0;
+  }
+
+  .navigationTop {
+    width: 100%;
+    border-bottom: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+    background: "[theme: white, default: #ffffff]";
+    flex-shrink: 0;
+
+    // Override generic Nav styles to be horizontal if possible, or just standard list
+    // Fluent UI Nav component is vertical by default. 
+    // We might need to style the inner ms-Nav-groupContent to be flex row if we stick with Nav.
+    // Or just let it take full width.
   }
 
   .mainCanvas {
@@ -143,11 +162,14 @@
 
   .permissionTable {
     width: 100%;
-    border-collapse: collapse;
-    background: "[theme: bodyBackground, default: #ffffff]";
+    margin-top: 20px;
     border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
     border-radius: 4px;
     overflow: hidden;
+
+    // Table tag styles (legacy)
+    border-collapse: collapse;
+    background: "[theme: bodyBackground, default: #ffffff]";
 
     thead {
       background: "[theme: neutralLighter, default: #faf9f8]";
@@ -171,6 +193,8 @@
     tr:hover {
       background: "[theme: neutralLighter, default: #f3f2f1]";
     }
+
+    // Flexbox table styles removed - using standard table
   }
 
   .userCell {
