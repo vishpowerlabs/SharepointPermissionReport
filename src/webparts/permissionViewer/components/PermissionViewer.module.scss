@@ -369,25 +369,7 @@
   }
 
 
-  // Specific fix for Deep Scan Dialog width
-  .deepScanModal {
-    :global(.ms-Dialog-main) {
-      min-width: 75vw !important;
-      max-width: 75vw !important;
-      width: 75vw !important;
-      background-color: "[theme: white, default: #ffffff]" !important;
-      color: "[theme: bodyText, default: #323130]" !important;
 
-      // Ensure headers in dialog match theme
-      .ms-Dialog-title {
-        color: "[theme: bodyText, default: #323130]";
-      }
-
-      .ms-Dialog-subText {
-        color: "[theme: neutralSecondary, default: #605e5c]";
-      }
-    }
-  }
 
   .checkAccessContainer {
     max-width: 800px;
@@ -518,6 +500,26 @@
 
   .govBtn {
     width: 100%;
-    margin-top: auto
+    margin-top: auto;
+  }
+}
+
+// Specific fix for Deep Scan Dialog width
+.deepScanModal {
+  :global(.ms-Dialog-main) {
+    min-width: 75vw !important;
+    max-width: 75vw !important;
+    width: 75vw !important;
+    background-color: "[theme: white, default: #ffffff]" !important;
+    color: "[theme: bodyText, default: #323130]" !important;
+
+    // Ensure headers in dialog match theme
+    .ms-Dialog-title {
+      color: "[theme: bodyText, default: #323130]";
+    }
+
+    .ms-Dialog-subText {
+      color: "[theme: neutralSecondary, default: #605e5c]";
+    }
   }
 }
