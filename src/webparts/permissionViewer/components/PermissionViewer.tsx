@@ -110,6 +110,16 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     // Storage Panel State
     const [isStoragePanelOpen, setIsStoragePanelOpen] = React.useState<boolean>(false);
 
+    const showConfirmDialog = (title: string, subText: string, onConfirm: () => void, onCancel?: () => void) => {
+        setDeleteConfirmState({
+            isOpen: true,
+            title,
+            subText,
+            onConfirm,
+            onCancel: onCancel || (() => { })
+        });
+    };
+
     React.useEffect(() => {
         let service: IPermissionService;
         if (props.useMockData) {
@@ -314,13 +324,11 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     };
 
     const handleRemoveSitePermission = (principalId: number, principalName: string) => {
-        setDeleteConfirmState({
-            isOpen: true,
-            title: `Remove Permissions?`,
-            subText: `Are you sure you want to remove permissions for ${principalName || 'this user'}? This will remove all permissions for this user on this site.`,
-            onConfirm: () => { void executeRemoveSitePermission(principalId); },
-            onCancel: () => { /* No-op for site perms */ }
-        });
+        showConfirmDialog(
+            `Remove Permissions?`,
+            `Are you sure you want to remove permissions for ${principalName || 'this user'}? This will remove all permissions for this user on this site.`,
+            () => { void executeRemoveSitePermission(principalId); }
+        );
     };
 
     const executeRemoveSitePermission = async (principalId: number) => {
@@ -361,15 +369,12 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     };
 
     const showRemoveListPermissionConfirm = (listId: string, principalId: number, principalName: string, resolve: (value: boolean | PromiseLike<boolean>) => void) => {
-        setDeleteConfirmState({
-            isOpen: true,
-            title: `Remove Permissions?`,
-            subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this list?`,
-            onConfirm: () => { void executeRemoveListPermission(listId, principalId, resolve); },
-            onCancel: () => {
-                resolve(false);
-            }
-        });
+        showConfirmDialog(
+            `Remove Permissions?`,
+            `Are you sure you want to remove permissions for ${principalName || 'this user'} on this list?`,
+            () => { void executeRemoveListPermission(listId, principalId, resolve); },
+            () => { resolve(false); }
+        );
     };
 
     const handleRemoveListPermission = (listId: string, principalId: number, principalName: string): Promise<boolean> => {
@@ -379,13 +384,11 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     };
 
     const handleRemoveDeepScanItemPermission = (itemId: number, principalId: number, principalName: string) => {
-        setDeleteConfirmState({
-            isOpen: true,
-            title: `Remove Permissions?`,
-            subText: `Are you sure you want to remove permissions for ${principalName || 'this user'} on this item?`,
-            onConfirm: () => { void executeRemoveDeepScanItemPermission(itemId, principalId); },
-            onCancel: () => { /* No-op */ }
-        });
+        showConfirmDialog(
+            `Remove Permissions?`,
+            `Are you sure you want to remove permissions for ${principalName || 'this user'} on this item?`,
+            () => { void executeRemoveDeepScanItemPermission(itemId, principalId); }
+        );
     };
 
     const removePrincipalFromItems = (items: IItemPermission[], itemId: number, principalId: number): IItemPermission[] => {
@@ -421,13 +424,11 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     };
 
     const handleRemoveFromGroup = (groupId: number, userId: number, userName: string) => {
-        setDeleteConfirmState({
-            isOpen: true,
-            title: `Remove from Group?`,
-            subText: `Are you sure you want to remove '${userName}' from this group?`,
-            onConfirm: () => { void executeRemoveFromGroup(groupId, userId); },
-            onCancel: () => { /* No-op */ }
-        });
+        showConfirmDialog(
+            `Remove from Group?`,
+            `Are you sure you want to remove '${userName}' from this group?`,
+            () => { void executeRemoveFromGroup(groupId, userId); }
+        );
     };
 
     const executeRemoveFromGroup = async (groupId: number, userId: number) => {

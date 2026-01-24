@@ -19,11 +19,7 @@ export class PermissionServiceNew implements IPermissionService {
             const json = await response.json();
 
             if (json && json.value) {
-                return json.value.map((item: any) => ({
-                    PrincipalId: item.PrincipalId,
-                    Member: item.Member,
-                    RoleDefinitionBindings: item.RoleDefinitionBindings
-                }));
+                return json.value.map((item: any) => this._mapRoleAssignment(item));
             }
             return [];
         } catch (error) {
@@ -54,14 +50,13 @@ export class PermissionServiceNew implements IPermissionService {
                 });
 
                 // Filter excludes and hidden system lists (Case Insensitive)
-                const normalizedExcludes = excludedLists.map(e => e.toLowerCase());
-                return lists.filter(l =>
-                    !normalizedExcludes.includes(l.Title.toLowerCase()) &&
-                    !l.Hidden &&
-                    l.Title !== 'Style Library' && // Common system libs that aren't "Hidden"
-                    l.Title !== 'Form Templates' &&
-                    l.Title !== 'Site Assets'
-                );
+                const systemExcludeSet = new Set(['style library', 'form templates', 'site assets']);
+                const userExcludeSet = new Set(excludedLists.map(e => e.toLowerCase()));
+
+                return lists.filter(l => {
+                    const titleLower = l.Title.toLowerCase();
+                    return !l.Hidden && !systemExcludeSet.has(titleLower) && !userExcludeSet.has(titleLower);
+                });
             }
             return [];
         } catch (error) {
@@ -78,11 +73,7 @@ export class PermissionServiceNew implements IPermissionService {
             const json = await response.json();
 
             if (json && json.value) {
-                return json.value.map((item: any) => ({
-                    PrincipalId: item.PrincipalId,
-                    Member: item.Member,
-                    RoleDefinitionBindings: item.RoleDefinitionBindings
-                }));
+                return json.value.map((item: any) => this._mapRoleAssignment(item));
             }
             return [];
         } catch (error) {
@@ -100,7 +91,10 @@ export class PermissionServiceNew implements IPermissionService {
                 totalGroups: groups.length,
                 uniquePermissionsCount: 0
             };
-        } catch (e) { return { totalUsers: 0, totalGroups: 0, uniquePermissionsCount: 0 }; }
+        } catch (e) {
+            console.error("Error fetching stats", e);
+            return { totalUsers: 0, totalGroups: 0, uniquePermissionsCount: 0 };
+        }
     }
 
     private async getSiteUsers(): Promise<IUser[]> {
@@ -128,10 +122,12 @@ export class PermissionServiceNew implements IPermissionService {
 
             let allGroups: any[] = [];
 
-            // Process SharePoint Groups
             if (groupsJson?.value) {
                 const spGroups = groupsJson.value.map((g: any) => {
-                    const users = g.Users ? (Array.isArray(g.Users) ? g.Users : (g.Users.value || g.Users.results || [])) : [];
+                    let users: any[] = [];
+                    if (g.Users) {
+                        users = Array.isArray(g.Users) ? g.Users : (g.Users.value || g.Users.results || []);
+                    }
                     return {
                         ...g,
                         PrincipalType: 8,
@@ -225,11 +221,7 @@ export class PermissionServiceNew implements IPermissionService {
                         Id: item.Id,
                         Title: item.FileLeafRef || item.Title || "Unknown Item",
                         Url: item.FileRef,
-                        RoleAssignments: item.RoleAssignments ? item.RoleAssignments.map((ra: any) => ({
-                            PrincipalId: ra.PrincipalId,
-                            Member: ra.Member,
-                            RoleDefinitionBindings: ra.RoleDefinitionBindings
-                        })) : []
+                        RoleAssignments: item.RoleAssignments ? item.RoleAssignments.map((ra: any) => this._mapRoleAssignment(ra)) : []
                     }));
                 }
             }
@@ -245,73 +237,54 @@ export class PermissionServiceNew implements IPermissionService {
     public async getOrphanedUsers(): Promise<IUser[]> { return []; }
     public async getSiteDetails(): Promise<any> { return { Title: "Site", Url: this._webUrl, HasUniqueRoleAssignments: false }; }
     public async getSiteUsage(): Promise<ISiteUsage> {
-        try {
-            // Strategy 1: /_api/site/usage
-            try {
-                const response = await this._spHttpClient.get(`${this._webUrl}/_api/site/usage`, SPHttpClient.configurations.v1);
-                if (response.ok) {
-                    const json = await response.json();
-                    console.log("DEBUG: Site Usage API Response", json);
-                    const usage = json.Usage || json.usage;
-                    if (usage) {
-                        let quota = usage.StorageQuota || usage.storageQuota || 0;
-                        const used = usage.Storage || usage.storage || 0;
-                        const pct = usage.StoragePercentageUsed || usage.storagePercentageUsed || 0;
+        // Strategy 1: /_api/site/usage
+        const usage = await this._fetchUsage(`${this._webUrl}/_api/site/usage`, "Strategy 1");
+        if (usage) return usage;
 
-                        // Calculate Quota if missing but we have Used and Pct
-                        if (quota === 0 && used > 0 && pct > 0) {
-                            quota = used / pct;
-                            console.log("DEBUG: Calculated Quota from Pct", quota);
-                        }
+        // Strategy 2: /_api/site?$select=Usage
+        const usage2 = await this._fetchUsage(`${this._webUrl}/_api/site?$select=Usage`, "Strategy 2");
+        if (usage2) return usage2;
 
-                        return {
-                            storageUsed: used,
-                            storageQuota: quota,
-                            usagePercentage: pct,
-                            lastItemModifiedDate: new Date().toISOString()
-                        };
-                    }
-                }
-            } catch (e) {
-                console.warn("Strategy 1 (site/usage) failed", e);
-            }
-
-            // Strategy 2: /_api/site?$select=Usage
-            try {
-                const response = await this._spHttpClient.get(`${this._webUrl}/_api/site?$select=Usage`, SPHttpClient.configurations.v1);
-                if (response.ok) {
-                    const json = await response.json();
-                    console.log("DEBUG: Site Usage Select Response", json);
-                    const usage = json.Usage || json.usage;
-                    if (usage) {
-                        let quota = usage.StorageQuota || usage.storageQuota || 0;
-                        const used = usage.Storage || usage.storage || 0;
-                        const pct = usage.StoragePercentageUsed || usage.storagePercentageUsed || 0;
-
-                        // Calculate Quota if missing but we have Used and Pct
-                        if (quota === 0 && used > 0 && pct > 0) {
-                            quota = used / pct;
-                        }
-
-                        return {
-                            storageUsed: used,
-                            storageQuota: quota,
-                            usagePercentage: pct,
-                            lastItemModifiedDate: new Date().toISOString()
-                        };
-                    }
-                }
-            } catch (e) {
-                console.warn("Strategy 2 (site select usage) failed", e);
-            }
-
-            return { storageUsed: 0, storageQuota: 0, usagePercentage: 0, lastItemModifiedDate: "" };
-
-        } catch (e) {
-            console.error("Error getting site usage", e);
-            return { storageUsed: 0, storageQuota: 0, usagePercentage: 0, lastItemModifiedDate: "" };
-        }
+        return { storageUsed: 0, storageQuota: 0, usagePercentage: 0, lastItemModifiedDate: "" };
     }
+
+    private async _fetchUsage(url: string, logPrefix: string): Promise<ISiteUsage | null> {
+        try {
+            const response = await this._spHttpClient.get(url, SPHttpClient.configurations.v1);
+            if (response.ok) {
+                const json = await response.json();
+                const usage = json.Usage || json.usage;
+                if (usage) {
+                    let quota = usage.StorageQuota || usage.storageQuota || 0;
+                    const used = usage.Storage || usage.storage || 0;
+                    const pct = usage.StoragePercentageUsed || usage.storagePercentageUsed || 0;
+
+                    if (quota === 0 && used > 0 && pct > 0) {
+                        quota = used / pct;
+                    }
+
+                    return {
+                        storageUsed: used,
+                        storageQuota: quota,
+                        usagePercentage: pct,
+                        lastItemModifiedDate: new Date().toISOString()
+                    };
+                }
+            }
+        } catch (e) {
+            console.warn(`${logPrefix} failed`, e);
+        }
+        return null;
+    }
+
+    private _mapRoleAssignment(item: any): IRoleAssignment {
+        return {
+            PrincipalId: item.PrincipalId,
+            Member: item.Member,
+            RoleDefinitionBindings: item.RoleDefinitionBindings
+        };
+    }
+
     public async getRoleDefinitions(): Promise<IRoleDefinitionDetail[]> { return []; }
     public async getUserEffectivePermissions(loginName: string): Promise<string[]> { return []; }
 }
