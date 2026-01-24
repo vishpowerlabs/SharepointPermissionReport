@@ -7,7 +7,7 @@ export class PermissionService implements IPermissionService {
     private readonly _webUrl: string;
 
     constructor(spHttpClient: SPHttpClient, webUrl: string) {
-        console.log("ForceUpdatePermissionService V3 INITIALIZED - Code is live!");
+
         this._spHttpClient = spHttpClient;
         this._webUrl = webUrl;
     }
@@ -131,10 +131,7 @@ export class PermissionService implements IPermissionService {
             if (groupsJson?.value) {
                 const spGroups = groupsJson.value.map((g: any) => {
                     // Log the first group to inspect structure
-                    if (g.Title === "DEVSITE Members" || g.Title === "Everyone") {
-                        console.log(`[PermissionService] inspecting group: ${g.Title}`, g);
-                        console.log(`[PermissionService] Users prop:`, g.Users);
-                    }
+
 
                     let users: any[] = [];
                     if (g.Users) {
@@ -166,7 +163,7 @@ export class PermissionService implements IPermissionService {
             }
 
             if (allGroups.length > 0) {
-                console.log("Raw All Groups:", allGroups.map((g: any) => g.Title));
+
 
                 // Filter out hidden groups and specific system groups
                 const validGroups = allGroups.filter((g: any) => {
@@ -196,7 +193,7 @@ export class PermissionService implements IPermissionService {
                     return true;
                 });
 
-                console.log("Filtered Groups:", validGroups.map((g: any) => g.Title));
+
 
                 return validGroups.map((g: any) => ({
                     Id: g.Id,

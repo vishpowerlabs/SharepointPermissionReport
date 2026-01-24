@@ -1,12 +1,9 @@
 import * as React from 'react';
-import { DefaultButton } from '@fluentui/react/lib/Button';
-import { IIconProps } from '@fluentui/react/lib/Icon';
 import styles from './PermissionViewer.module.scss';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
 
 
 export interface IHeaderProps {
-    isLoading: boolean;
     themeVariant: IReadonlyTheme | undefined;
     opacity?: number;
     title?: string;

@@ -106,7 +106,6 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     React.useEffect(() => {
         let service: IPermissionService;
         if (props.useMockData) {
-            console.log("Using Mock Data");
             service = new MockPermissionService();
         } else {
             service = new PermissionService(props.spHttpClient, props.webUrl);
@@ -138,9 +137,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                 }
             }
 
-            // SIMULATION OVERRIDE
             if (props.simulateAccessDenied) {
-                console.log("Simulating Access Denied via Web Part Property");
                 isAllowed = false;
             }
 
@@ -221,11 +218,9 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             uniquePermissionsCount: uniqueListsCount
         });
 
-        // Fallback for Storage Usage if API returned 0
         if (usage.storageUsed === 0 && listsData.length > 0) {
             const totalListBytes = listsData.reduce((acc, list) => acc + (list.TotalSize || 0), 0);
             if (totalListBytes > 0) {
-                console.log("Using Calculated Storage Fallback:", totalListBytes);
                 setSiteUsage({
                     ...usage,
                     storageUsed: totalListBytes
@@ -277,7 +272,6 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             <div className={styles.permissionViewer}>
                 <div className={styles.webpartContainer}>
                     <Header
-                        isLoading={isLoading}
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity ?? 100}
                         title={props.webPartTitle}
@@ -594,8 +588,6 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         titleFontSize={props.webPartTitleFontSize}
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity}
-                        isLoading={isLoading}
-
                     />
                 )}
 

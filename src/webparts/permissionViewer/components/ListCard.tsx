@@ -116,7 +116,7 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                 </div>
             </div>
             <div className={styles.listUrl} style={{ fontSize: '12px', color: '#605e5c', fontStyle: 'italic', marginBottom: '16px' }}>
-                {list.ServerRelativeUrl} <span style={{ color: 'red', fontWeight: 'bold' }}>(Debug: {String(list.HasUniqueRoleAssignments)})</span>
+                {list.ServerRelativeUrl}
             </div>
 
             {isExpanded && (
