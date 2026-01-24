@@ -85,3 +85,27 @@ export interface IRoleDefinitionDetail {
     Hidden: boolean;
     RoleTypeKind: number;
 }
+
+export interface ICommonProps {
+    headerOpacity?: number;
+    showStats?: boolean;
+    excludedLists?: string[];
+    buttonFontSize?: string;
+    showComponentHeader?: boolean;
+    webPartTitle?: string;
+    webPartTitleFontSize?: string;
+    contentFontSize?: string;
+    simulateAccessDenied?: boolean;
+    useMockData?: boolean;
+    showExternalUserAudit?: boolean;
+    showSharingLinks?: boolean;
+    showOrphanedUsers?: boolean;
+    showSecurityGovernanceTab?: boolean;
+    navLayout?: 'left' | 'top';
+    storageFormat?: 'Auto' | 'MB' | 'GB' | 'TB';
+}
+
+export interface IPermissionViewerWebPartProps extends ICommonProps {
+    description: string;
+}
+

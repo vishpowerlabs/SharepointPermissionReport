@@ -17,27 +17,7 @@ import {
 } from '@microsoft/sp-component-base';
 import { PropertyFieldMultiSelect } from '@pnp/spfx-property-controls/lib/PropertyFieldMultiSelect';
 
-export interface IPermissionViewerWebPartProps {
-    description: string;
-    headerOpacity: number;
-    showStats: boolean;
-    excludedLists: string[];
-    themeVariant: IReadonlyTheme | undefined;
-
-    buttonFontSize: string;
-    showComponentHeader: boolean;
-    webPartTitle: string;
-    webPartTitleFontSize: string;
-    contentFontSize: string;
-    simulateAccessDenied: boolean;
-    useMockData: boolean;
-    showExternalUserAudit: boolean;
-    showSharingLinks: boolean;
-    showOrphanedUsers: boolean;
-    showSecurityGovernanceTab: boolean;
-    navLayout: 'left' | 'top';
-    storageFormat: 'Auto' | 'MB' | 'GB' | 'TB';
-}
+import { IPermissionViewerWebPartProps } from './models/IPermissionData';
 
 
 

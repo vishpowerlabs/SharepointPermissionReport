@@ -5,7 +5,7 @@ import { DefaultButton, PrimaryButton } from '@fluentui/react/lib/Button';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
-import { PermissionServiceNew } from '../services/PermissionServiceNew';
+import { PermissionService } from '../services/PermissionService';
 import { MockPermissionService } from '../services/MockPermissionService';
 import { IPermissionService } from '../services/IPermissionService';
 import { Header } from './Header';
@@ -18,7 +18,7 @@ import { CheckAccess } from './CheckAccess';
 import { SiteAdmins } from './SiteAdmins';
 import { SiteGroups } from './SiteGroups';
 import { SecurityGovernance } from './SecurityGovernance';
-import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup, ISiteUsage } from '../models/IPermissionData';
+import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup, ISiteUsage, ICommonProps } from '../models/IPermissionData';
 import { exportSitePermissions, exportListPermissions, exportDeepScanResults } from '../utils/CsvExport';
 
 import { Dialog, DialogType, DialogFooter, MessageBar, MessageBarType, Panel, PanelType, Checkbox } from '@fluentui/react';
@@ -26,27 +26,10 @@ import styles from './PermissionViewer.module.scss';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { formatBytes } from '../utils/FormatUtils';
 
-export interface IPermissionViewerProps {
+export interface IPermissionViewerProps extends ICommonProps {
     spHttpClient: SPHttpClient;
     webUrl: string;
     themeVariant: IReadonlyTheme | undefined;
-    headerOpacity?: number;
-    showStats?: boolean;
-    excludedLists?: string[];
-
-    buttonFontSize?: string;
-    showComponentHeader?: boolean;
-    webPartTitle?: string;
-    webPartTitleFontSize?: string;
-    contentFontSize?: string;
-    simulateAccessDenied?: boolean;
-    useMockData?: boolean;
-    showExternalUserAudit?: boolean;
-    showSharingLinks?: boolean;
-    showOrphanedUsers?: boolean;
-    showSecurityGovernanceTab?: boolean;
-    navLayout?: 'left' | 'top';
-    storageFormat?: 'Auto' | 'MB' | 'GB' | 'TB';
 }
 
 const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props) => {
@@ -126,7 +109,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             console.log("Using Mock Data");
             service = new MockPermissionService();
         } else {
-            service = new PermissionServiceNew(props.spHttpClient, props.webUrl);
+            service = new PermissionService(props.spHttpClient, props.webUrl);
         }
         setPermissionService(service);
         checkAccessAndLoad(service);
