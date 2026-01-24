@@ -52,6 +52,7 @@ export interface ISiteStats {
     totalUsers: number;
     totalGroups: number;
     uniquePermissionsCount: number;
+    emptyGroupsCount: number;
 }
 
 export interface IItemPermission {

@@ -56,7 +56,8 @@ export class MockPermissionService implements IPermissionService {
         return {
             totalUsers: 142,
             totalGroups: 15,
-            uniquePermissionsCount: 8
+            uniquePermissionsCount: 8,
+            emptyGroupsCount: 2
         };
     }
 

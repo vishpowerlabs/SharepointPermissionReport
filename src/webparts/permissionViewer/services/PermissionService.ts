@@ -103,11 +103,12 @@ export class PermissionService implements IPermissionService {
             return {
                 totalUsers: usersJson.value ? usersJson.value.length : 0,
                 totalGroups: groups.length,
-                uniquePermissionsCount: 0
+                uniquePermissionsCount: 0,
+                emptyGroupsCount: groups.filter(g => g.UserCount === 0).length
             };
         } catch (error) {
             console.error("Error fetching stats", error);
-            return { totalUsers: 0, totalGroups: 0, uniquePermissionsCount: 0 };
+            return { totalUsers: 0, totalGroups: 0, uniquePermissionsCount: 0, emptyGroupsCount: 0 };
         }
     }
 
@@ -202,7 +203,8 @@ export class PermissionService implements IPermissionService {
                     Description: g.Description || "",
                     IsHiddenInUI: g.IsHiddenInUI,
                     OwnerTitle: g.OwnerTitle || "",
-                    PrincipalType: g.PrincipalType // Map PrincipalType
+                    PrincipalType: g.PrincipalType, // Map PrincipalType
+                    UserCount: g.UserCount || 0
                 } as IGroup));
             }
             return [];

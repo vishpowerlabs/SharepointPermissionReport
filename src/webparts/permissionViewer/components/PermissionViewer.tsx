@@ -9,7 +9,6 @@ import { PermissionService } from '../services/PermissionService';
 import { MockPermissionService } from '../services/MockPermissionService';
 import { IPermissionService } from '../services/IPermissionService';
 import { Header } from './Header';
-import { StatsCards } from './StatsCards';
 import { SitePermissions } from './SitePermissions';
 import { ListPermissions } from './ListPermissions';
 import { LoadingState } from './LoadingState';
@@ -40,7 +39,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const [lists, setLists] = React.useState<IListInfo[]>([]);
     const [filteredLists, setFilteredLists] = React.useState<IListInfo[]>([]);
 
-    const [stats, setStats] = React.useState<ISiteStats>({ totalUsers: 0, totalGroups: 0, uniquePermissionsCount: 0 });
+    const [stats, setStats] = React.useState<ISiteStats>({ totalUsers: 0, totalGroups: 0, uniquePermissionsCount: 0, emptyGroupsCount: 0 });
     const [isLoading, setIsLoading] = React.useState<boolean>(true);
     const [loadingMessage, setLoadingMessage] = React.useState<string>('Loading site permissions...');
     const [permissionService, setPermissionService] = React.useState<IPermissionService>();
@@ -276,6 +275,13 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         opacity={props.headerOpacity ?? 100}
                         title={props.webPartTitle}
                         titleFontSize={props.webPartTitleFontSize}
+                        stats={stats}
+                        siteUsage={siteUsage || undefined}
+                        storageFormat={props.storageFormat}
+                        onUniquePermissionsClick={() => setIsUniquePermsPanelOpen(true)}
+                        onGroupsClick={() => setIsGroupsPanelOpen(true)}
+                        onStorageClick={() => setIsStoragePanelOpen(true)}
+                        contentFontSize={props.contentFontSize}
                     />
                     <div style={{ padding: '20px', textAlign: 'center' }}>
                         <h2 style={{ color: '#d13438' }}>You don't have access to this report</h2>
@@ -588,6 +594,13 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         titleFontSize={props.webPartTitleFontSize}
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity}
+                        stats={stats}
+                        siteUsage={siteUsage || undefined}
+                        storageFormat={props.storageFormat}
+                        onUniquePermissionsClick={() => setIsUniquePermsPanelOpen(true)}
+                        onGroupsClick={() => setIsGroupsPanelOpen(true)}
+                        onStorageClick={() => setIsStoragePanelOpen(true)}
+                        contentFontSize={props.contentFontSize}
                     />
                 )}
 
@@ -628,17 +641,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                     </div>
 
                     <div className={styles.mainCanvas}>
-                        {(props.showStats !== false) && (
-                            <StatsCards
-                                stats={stats}
-                                siteUsage={siteUsage || undefined}
-                                highlight={false}
-                                onUniquePermissionsClick={() => setIsUniquePermsPanelOpen(true)}
-                                onGroupsClick={() => setIsGroupsPanelOpen(true)}
-                                onStorageClick={() => setIsStoragePanelOpen(true)}
-                                storageFormat={props.storageFormat}
-                            />
-                        )}
+
 
                         <div className={styles.toolbar}>
                             {(activeTab === 'site' || activeTab === 'lists') && (

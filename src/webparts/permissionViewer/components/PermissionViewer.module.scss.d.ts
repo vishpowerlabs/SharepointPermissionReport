@@ -51,6 +51,12 @@ export interface IExportStyles {
 
   'header': string;
 
+  'headerAlertBadge': string;
+
+  'headerStatBtn': string;
+
+  'headerStats': string;
+
   'inheritedInfo': string;
 
   'layoutContainer': string;
