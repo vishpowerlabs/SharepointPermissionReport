@@ -76,7 +76,7 @@
   }
 
   .headerStatBtn {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.15);
     border: none;
     border-radius: 4px;
     padding: 6px 14px;
@@ -89,31 +89,13 @@
     font-weight: 600;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.4);
+      background: rgba(0, 0, 0, 0.25);
     }
 
     :global(.ms-Icon) {
       font-size: 18px !important;
       color: #ffffff !important;
     }
-  }
-
-  .headerAlertBadge {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    background: #d13438;
-    color: #ffffff;
-    border-radius: 50%;
-    width: 14px;
-    height: 14px;
-    font-size: 9px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #ffffff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   .statsContainer {
@@ -385,156 +367,156 @@
       margin: 12px 0;
     }
   }
-}
 
-// Specific fix for Deep Scan Dialog width
-.deepScanModal {
-  :global(.ms-Dialog-main) {
-    min-width: 75vw !important;
-    max-width: 75vw !important;
-    width: 75vw !important;
-    background-color: "[theme: white, default: #ffffff]" !important;
-    color: "[theme: bodyText, default: #323130]" !important;
 
-    // Ensure headers in dialog match theme
-    .ms-Dialog-title {
-      color: "[theme: bodyText, default: #323130]";
+  // Specific fix for Deep Scan Dialog width
+  .deepScanModal {
+    :global(.ms-Dialog-main) {
+      min-width: 75vw !important;
+      max-width: 75vw !important;
+      width: 75vw !important;
+      background-color: "[theme: white, default: #ffffff]" !important;
+      color: "[theme: bodyText, default: #323130]" !important;
+
+      // Ensure headers in dialog match theme
+      .ms-Dialog-title {
+        color: "[theme: bodyText, default: #323130]";
+      }
+
+      .ms-Dialog-subText {
+        color: "[theme: neutralSecondary, default: #605e5c]";
+      }
+    }
+  }
+
+  .checkAccessContainer {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .userResultItem {
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: "[theme: neutralLight, default: #edebe9]";
+    }
+  }
+
+  .adminGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .adminCard {
+    background: "[theme: bodyBackground, default: #ffffff]";
+    border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+    border-radius: 8px;
+    padding: 16px;
+    flex: 1 1 280px; // Responsive width
+    max-width: 100%; // Ensure it doesn't overflow container on very small screens
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s;
+
+    &:hover {
+      border-color: "[theme: themePrimary, default: #0078d4]";
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
     }
 
-    .ms-Dialog-subText {
+    .adminHeader {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .adminDetails {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
       color: "[theme: neutralSecondary, default: #605e5c]";
     }
   }
-}
 
-.checkAccessContainer {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.userResultItem {
-  transition: background-color 0.2s;
-
-  &:hover {
-    background-color: "[theme: neutralLight, default: #edebe9]";
-  }
-}
-
-.adminGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.adminCard {
-  background: "[theme: bodyBackground, default: #ffffff]";
-  border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
-  border-radius: 8px;
-  padding: 16px;
-  flex: 1 1 280px; // Responsive width
-  max-width: 100%; // Ensure it doesn't overflow container on very small screens
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s;
-
-  &:hover {
-    border-color: "[theme: themePrimary, default: #0078d4]";
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  // Security & Governance Styles
+  .governanceGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    padding: 24px 32px;
   }
 
-  .adminHeader {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .adminDetails {
+  .governanceCard {
+    background: "[theme: bodyBackground, default: #ffffff]";
+    border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    font-size: 13px;
-    color: "[theme: neutralSecondary, default: #605e5c]";
-  }
-}
 
-// Security & Governance Styles
-.governanceGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
-  padding: 24px 32px;
-}
+    &:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
 
-.governanceCard {
-  background: "[theme: bodyBackground, default: #ffffff]";
-  border: 1px solid "[theme: neutralLight, default: #e1dfdd]";
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s ease;
-  display: flex;
-  flex-direction: column;
+    .govIcon {
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
 
-  &:hover {
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
-  }
+    .govTitle {
+      font-size: 18px;
+      font-weight: 600;
+      color: "[theme: bodyText, default: #323130]";
+      margin: 0 0 8px 0;
+    }
 
-  .govIcon {
-    font-size: 32px;
-    margin-bottom: 16px;
-  }
-
-  .govTitle {
-    font-size: 18px;
-    font-weight: 600;
-    color: "[theme: bodyText, default: #323130]";
-    margin: 0 0 8px 0;
-  }
-
-  .govStat {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    .govStat {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
 
 
+    }
+
+    .govStatInfo {
+      color: "[theme: themePrimary, default: #0078d4]";
+    }
+
+    .govStatWarning {
+      color: "[theme: orange, default: #ca5010]";
+    }
+
+    .govStatAlert {
+      color: "[theme: red, default: #d13438]";
+    }
   }
 
-  .govStatInfo {
-    color: "[theme: themePrimary, default: #0078d4]";
+  .govList {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 24px 0;
+    flex: 1;
+
+    li {
+      font-size: 14px;
+      color: "[theme: neutralSecondary, default: #605e5c]";
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
   }
 
-  .govStatWarning {
-    color: "[theme: orange, default: #ca5010]";
+  .govBtn {
+    width: 100%;
+    margin-top: auto;
   }
-
-  .govStatAlert {
-    color: "[theme: red, default: #d13438]";
-  }
-}
-
-.govList {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 24px 0;
-  flex: 1;
-
-  li {
-    font-size: 14px;
-    color: "[theme: neutralSecondary, default: #605e5c]";
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-}
-
-.govBtn {
-  width: 100%;
-  margin-top: auto;
-}

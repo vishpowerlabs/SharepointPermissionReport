@@ -51,8 +51,6 @@ export interface IExportStyles {
 
   'header': string;
 
-  'headerAlertBadge': string;
-
   'headerStatBtn': string;
 
   'headerStats': string;
