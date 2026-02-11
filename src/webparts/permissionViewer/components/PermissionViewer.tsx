@@ -586,7 +586,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     ];
 
     return (
-        <div className={styles.permissionViewer}>
+        <div className={styles.permissionViewer} style={{ '--content-font-size': props.contentFontSize || '14px' } as React.CSSProperties}>
             <div className={styles.webpartContainer}>
                 {(props.showComponentHeader !== false) && (
                     <Header
@@ -613,7 +613,9 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                     if (item?.props.itemKey) setActiveTab(item.props.itemKey);
                                 }}
                                 styles={{
-                                    root: { paddingLeft: 16, paddingTop: 8 }
+                                    root: { paddingLeft: 16, paddingTop: 8 },
+                                    link: { fontSize: props.contentFontSize },
+                                    linkIsSelected: { fontSize: props.contentFontSize }
                                 }}
                             >
                                 <PivotItem headerText="Site Permissions" itemKey="site" itemIcon="Shield" />
@@ -634,6 +636,9 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                         boxSizing: 'border-box',
                                         border: '1px solid transparent',
                                         overflowY: 'auto'
+                                    },
+                                    link: {
+                                        fontSize: props.contentFontSize
                                     }
                                 }}
                             />
