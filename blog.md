@@ -22,7 +22,7 @@ The **Permission Viewer** web part addresses this challenge by providing a centr
 
 ### 3.1. Centralized Dashboard
 The web part provides a "Single Pane of Glass" view for all site security.
-- **Statistics Cards**: Get an immediate overview of your site's security posture with cards showing Total Lists, Total Groups, and the count of lists with Unique Permissions.
+- **Statistics Cards**: Get an immediate overview of your site's security posture with cards showing Total Users, SharePoint Groups, count of lists with Unique Permissions, and Orphaned Users.
 - **Tabbed Interface**: Easily switch between **Site Permissions** (site-level access) and **Lists & Libraries** (item-level access).
 
 ### 3.2. Comprehensive Permission Analysis
@@ -34,8 +34,10 @@ The web part provides a "Single Pane of Glass" view for all site security.
 - **Smart Filtering**: Automatically filters out "Limited Access" noise. The report only shows explicit permission grants (e.g., Read, Edit), so you don't get cluttered with users who only have access to nested items.
 
 ### 3.3. Deep Dive Capabilities
-- **Group Management**: Don't just see "Marketing Members" - click to expand SharePoint groups to reveal the individual users inside. **New!** Directly remove users from SharePoint groups instantly from the details panel, streamlining your security management workflow.
+- **Deep Clean (Orphaned User Scanner)**: Performs a comprehensive scan of the entire site to identify accounts that are disabled or deleted in Azure AD but still hold permissions. You can remove these invalid permissions directly from the interface.
+- **Group & Member Management**: Don't just see "Marketing Members" - click to expand SharePoint groups to reveal the individual users inside. Visually flag orphaned users within groups who are disabled/deleted. **New!** Directly remove users from SharePoint groups instantly from the details panel, streamlining your security management workflow.
 - **Deep Scan**: Initiate a **Deep Scan** on any list or library (even inherited ones) to verify every single item. This is critical for catching individual files or folders that may have broken inheritance within an otherwise standard library.
+- **Storage Reporting**: Provides enhanced storage reporting with a detailed breakdown panel and support for multiple formats (Auto, MB, GB, TB).
 
 ### 3.4. Check Access (Audit View)
 - **User Permission Audit**: Instantly search for any user in your organization directory (using the People Picker API) to see their explicit permissions.
@@ -46,6 +48,8 @@ The web part provides a "Single Pane of Glass" view for all site security.
 - **Visual Customization**: Tailor the look and feel of the web part to match your page perfectly.
     - **Font Sizes**: Independently configure font sizes for the Web Part Title, Content (Table headers & rows), and Buttons.
     - **Header Control**: Toggle the display of the web part header component.
+    - **Storage Format**: Choose the preferred format for storage display (Auto, MB, GB, TB).
+- **Testing Simulator**: Includes a `simulateAccessDenied` configuration to force an "Access Denied" state for testing access behaviors.
 - **Configurable Exclusions**: Easily exclude system lists (like 'Site Assets', 'Style Library', 'TaxonomyHiddenList') from the report to focus on business content.
 - **CSV Export**: Comprehensive export options for offline analysis, auditing, or archival:
     - **Site-Level Export**: Download all permissions for the site.
@@ -65,6 +69,8 @@ The web part is fully **Theme Aware**. It doesn't just sit on the page; it feels
     *   **Font Sizes**: Select your preferred size for the Web Part Title (Small to Huge), Content (Small to Extra Large), and Buttons (Small to Huge).
     *   **Show Web Part Header**: Toggle the visibility of the "Permission Viewer" header block.
     *   **Show Statistics**: Toggle summary cards on/off.
+    *   **Storage Format**: Toggle the format for storage display (Auto, MB, GB, TB).
+    *   **Simulate Access Denied**: Force the "Access Denied" state to safely test administrative error states.
     *   **Excluded Lists**: Select which system lists to ignore in the report.
 3.  **Scanning**: Upon loading, the web part uses the SharePoint REST API to fetch site and list permission information. It identifies inheritance status (Unique vs. Inherited) and aggregates role assignments for display.
 
