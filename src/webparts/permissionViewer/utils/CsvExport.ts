@@ -1,4 +1,4 @@
-import { IRoleAssignment, IListInfo, IItemPermission } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, IItemPermission, IPublicAccessResult, IOversharedFolder } from '../models/IPermissionData';
 import { IPermissionService } from '../services/IPermissionService';
 
 const CSV_HEADER_URI = "data:text/csv;charset=utf-8,";
@@ -112,4 +112,60 @@ export const exportDeepScanResults = (
     });
 
     downloadCsv(csvContent, `${listTitle}_DeepScan.csv`);
+};
+
+export const exportStorageMetrics = (
+    lists: IListInfo[],
+    siteUsage: any // using any or ISiteUsage if imported
+): void => {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "List Name,Item Count,Total Size (Bytes),% of Site,Last Modified\n";
+
+    const totalUsed = siteUsage?.storageUsed || 1; // Avoid divide by zero
+
+    lists.forEach(list => {
+        const size = list.TotalSize || 0;
+        const percent = (size / totalUsed) * 100;
+        const cleanTitle = list.Title.replaceAll('"', '""');
+        const lastMod = list.LastItemModifiedDate ? new Date(list.LastItemModifiedDate).toLocaleDateString() : '-';
+
+        csvContent += `"${cleanTitle}",${list.ItemCount},${size},${percent.toFixed(2)}%,${lastMod}\n`;
+    });
+
+    downloadCsv(csvContent, 'StorageMetrics.csv');
+};
+
+export const exportPublicAccessResults = (
+    items: IPublicAccessResult[]
+): void => {
+    let csvContent = CSV_HEADER_URI;
+    csvContent += "Scope,Location,Url,Public Group,Type,Permission\n";
+
+    items.forEach(item => {
+        const cleanName = item.itemName.replaceAll('"', '""');
+        const roles = item.roles.join('; ');
+        csvContent += `${item.scope},"${cleanName}","${item.itemUrl}","${item.principalName}",${item.principalType},"${roles}"\n`;
+    });
+
+    downloadCsv(csvContent, 'PublicAccessReport.csv');
+};
+
+export const exportFolderOversharingResults = (
+    items: IOversharedFolder[],
+    listTitle: string
+): void => {
+    let csvContent = CSV_HEADER_URI;
+    csvContent += "Folder Name,Shared With,Permissions,Path,Login Name\n";
+
+    items.forEach(item => {
+        const cleanName = item.Name.replaceAll('"', '""');
+        const cleanPath = item.Path;
+        const sharedWith = item.SharedWith.replaceAll('"', '""');
+        const perms = item.Permissions.replaceAll('"', '""');
+        const login = (item.LoginName || '').replaceAll('"', '""');
+
+        csvContent += `"${cleanName}","${sharedWith}","${perms}","${cleanPath}","${login}"\n`;
+    });
+
+    downloadCsv(csvContent, `${listTitle}_OversharedFolders.csv`);
 };

@@ -35,7 +35,33 @@ export const UserPersona: React.FunctionComponent<IUserPersonaProps> = (props) =
             // Using explicit styles here or relying on className if feasible, but coinInner isn't a valid prop in some versions
             />
             <div className={styles.userInfo} style={{ display: 'flex', flexDirection: 'column' }}>
-                <span className={styles.userName} style={{ fontSize: fontSize || '14px', color: '#323130', fontWeight: 600 }}>{user.Title}</span>
+                <span className={styles.userName} style={{ fontSize: fontSize || '14px', color: '#323130', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {user.Title}
+                    {(user.OrphanStatus === 'Deleted' || (user as any).isDeleted) && (
+                        <span style={{
+                            backgroundColor: '#fde7e9',
+                            color: '#d13438',
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            border: '1px solid #d13438',
+                            fontWeight: 600,
+                            display: 'inline-block'
+                        }}>Deleted</span>
+                    )}
+                    {(user.OrphanStatus === 'Disabled' || (user as any).isDisabled) && (
+                        <span style={{
+                            backgroundColor: '#f3f2f1',
+                            color: '#605e5c',
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            border: '1px solid #605e5c',
+                            fontWeight: 600,
+                            display: 'inline-block'
+                        }}>Disabled</span>
+                    )}
+                </span>
                 <span className={styles.userEmail} style={{ fontSize: fontSize ? `calc(${fontSize} - 2px)` : '12px', color: '#605e5c' }}>
                     {description}
                 </span>

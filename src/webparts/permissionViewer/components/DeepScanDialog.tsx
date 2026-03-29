@@ -32,7 +32,7 @@ const renderPathColumn = (item: IItemPermission) => <span title={item.ServerRela
 const renderUserColumn = (item: IItemPermission, onRemovePermission?: (itemId: number, principalId: number, principalName: string) => void) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {item.RoleAssignments.map((ra) => {
-            const isUser = ra.Member.PrincipalType === 1;
+
             const handleDelete = () => {
                 if (onRemovePermission) {
                     onRemovePermission(item.Id, ra.PrincipalId, ra.Member.Title);
@@ -41,14 +41,15 @@ const renderUserColumn = (item: IItemPermission, onRemovePermission?: (itemId: n
             return (
                 <div key={ra.PrincipalId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <UserPersona user={ra.Member} />
-                    {isUser && onRemovePermission && (
-                        <IconButton
-                            iconProps={{ iconName: 'Delete' }}
-                            title="Remove Permission"
-                            onClick={handleDelete}
-                            styles={{ root: { height: 24, width: 24, color: '#a80000', fontSize: '14px', marginLeft: '8px' } }}
-                        />
-                    )}
+                    {/* Show delete for everyone EXCEPT SharePoint Groups (Type 8) */
+                        ra.Member.PrincipalType !== 8 && onRemovePermission && (
+                            <IconButton
+                                iconProps={{ iconName: 'Delete' }}
+                                title="Remove Permission"
+                                onClick={handleDelete}
+                                styles={{ root: { height: 24, width: 24, color: '#a80000', fontSize: '14px', marginLeft: '8px' } }}
+                            />
+                        )}
                 </div>
             );
         })}

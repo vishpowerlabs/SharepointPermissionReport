@@ -1,5 +1,5 @@
 import { IPermissionService } from './IPermissionService';
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo, ISiteUsage, IRoleDefinitionDetail } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo, ISiteUsage, IRoleDefinitionDetail, IOversharedFolder } from '../models/IPermissionData';
 
 export class MockPermissionService implements IPermissionService {
 
@@ -112,6 +112,10 @@ export class MockPermissionService implements IPermissionService {
         console.log(`[Mock] Removing user ${userId} from group ${groupId}`);
         return true;
     }
+    public async removeUserFromUserInfoList(principalId: number): Promise<boolean> {
+        console.log(`[Mock] Removing user ${principalId} from User Info List`);
+        return true;
+    }
     public async getUniquePermissionItems(listId: string): Promise<IItemPermission[]> {
         return [
             { Id: 55, Title: "Confidential Strategy.docx", ServerRelativeUrl: "/sites/marketing/docs/strategy.docx", FileSystemObjectType: 1, RoleAssignments: [] }
@@ -188,5 +192,67 @@ export class MockPermissionService implements IPermissionService {
         if (loginName.includes("admin")) return ["FullControl", "ManageWeb", "CreateGroups"];
         if (loginName.includes("john")) return ["ViewPages", "EditListItems", "ViewListItems"];
         return ["ViewPages", "ViewListItems"];
+    }
+    public async checkOrphansForRoleAssignments(roles: IRoleAssignment[]): Promise<IRoleAssignment[]> {
+        // Mock implementation: Mark any user with "orphan" in login or name as Deleted
+        return roles.map(r => {
+            if (r.Member.PrincipalType === 1) {
+                const login = r.Member.LoginName || "";
+                if (login.includes("orphan") || r.Member.Title.includes("Orphan")) {
+                    r.Member.OrphanStatus = 'Deleted';
+                }
+            }
+            return r;
+        });
+    }
+
+    public maskOrphanedUser(userId: number): void {
+        console.log(`[Mock] Masking orphaned user ID: ${userId}`);
+    }
+
+    public async getAADGroupMembers(loginName: string, title: string): Promise<IUser[]> {
+        // Mock implementation
+        if (title === "Security Audit Team" || title.includes("Audit")) {
+            return [
+                { Id: 901, Title: "Auditor One", Email: "auditor1@external.com", LoginName: "auditor1", PrincipalType: 1, IsHiddenInUI: false },
+                { Id: 902, Title: "Auditor Two", Email: "auditor2@external.com", LoginName: "auditor2", PrincipalType: 1, IsHiddenInUI: false }
+            ];
+        }
+        return [];
+    }
+
+    public async checkOrphanUsers(users: IUser[]): Promise<IUser[]> {
+        return users.filter(u => u.LoginName?.includes("orphan") || u.Title.includes("Orphan"))
+            .map(u => ({ ...u, OrphanStatus: 'Deleted' }));
+    }
+
+
+
+
+    public async checkOversharingFolders(listId: string, signal?: AbortSignal): Promise<IOversharedFolder[]> {
+        return [
+            { Name: 'Public Folder', Path: '/sites/marketing/Shared Documents/Public Folder', SharedWith: 'Everyone', Permissions: 'Read' },
+            { Name: 'External Drop', Path: '/sites/marketing/Shared Documents/External Drop', SharedWith: 'Anonymous Users', Permissions: 'Contribute' }
+        ];
+    }
+
+    public async debugItemPermissions(listTitle: string, itemQuery: string): Promise<string> {
+        return "Debug info: Item has broken inheritance. Everyone has Read access.";
+    }
+    public async checkOversharingRootItems(listId: string): Promise<IOversharedFolder[]> {
+        return [];
+    }
+
+    public async scanFolderContents(folderUrl: string): Promise<IOversharedFolder[]> {
+        return [
+            {
+                Name: "Mock Subfile.docx",
+                Path: folderUrl + "/Mock Subfile.docx",
+                SharedWith: "Everyone",
+                Permissions: "Contribute",
+                PrincipalType: 4,
+                LoginName: "c:0(.s|true" // Added to match interface
+            }
+        ];
     }
 }

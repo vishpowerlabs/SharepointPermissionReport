@@ -3,7 +3,12 @@ import { Nav, INavLinkGroup } from '@fluentui/react/lib/Nav';
 import { Pivot, PivotItem } from '@fluentui/react/lib/Pivot';
 import { DefaultButton, PrimaryButton } from '@fluentui/react/lib/Button';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
-import { SPHttpClient } from '@microsoft/sp-http';
+import { Dialog, DialogType, DialogFooter } from '@fluentui/react/lib/Dialog';
+import { MessageBar, MessageBarType } from '@fluentui/react/lib/MessageBar';
+import { Panel, PanelType } from '@fluentui/react/lib/Panel';
+import { Checkbox } from '@fluentui/react/lib/Checkbox';
+import { Icon } from '@fluentui/react/lib/Icon';
+import { SPHttpClient, MSGraphClientFactory } from '@microsoft/sp-http';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
 import { PermissionService } from '../services/PermissionService';
 import { MockPermissionService } from '../services/MockPermissionService';
@@ -16,17 +21,19 @@ import { DeepScanDialog } from './DeepScanDialog';
 import { CheckAccess } from './CheckAccess';
 import { SiteAdmins } from './SiteAdmins';
 import { SiteGroups } from './SiteGroups';
+import { DeepClean } from './DeepClean';
+import { PublicAccess } from './PublicAccess';
 import { SecurityGovernance } from './SecurityGovernance';
-import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup, ISiteUsage, ICommonProps } from '../models/IPermissionData';
-import { exportSitePermissions, exportListPermissions, exportDeepScanResults } from '../utils/CsvExport';
-
-import { Dialog, DialogType, DialogFooter, MessageBar, MessageBarType, Panel, PanelType, Checkbox } from '@fluentui/react';
+import { IItemPermission, IRoleAssignment, IListInfo, ISiteStats, IUser, IGroup, ISharingInfo, ISiteUsage, ICommonProps, IOversharedFolder } from '../models/IPermissionData';
+import { exportSitePermissions, exportListPermissions, exportDeepScanResults, exportStorageMetrics } from '../utils/CsvExport';
 import styles from './PermissionViewer.module.scss';
-import { Icon } from '@fluentui/react/lib/Icon';
 import { formatBytes } from '../utils/FormatUtils';
+import { OrphanedUsersPanel } from './OrphanedUsersPanel';
+import { FolderOversharingPanel } from './FolderOversharingPanel';
 
 export interface IPermissionViewerProps extends ICommonProps {
     spHttpClient: SPHttpClient;
+    msGraphClientFactory?: MSGraphClientFactory;
     webUrl: string;
     themeVariant: IReadonlyTheme | undefined;
 }
@@ -54,6 +61,8 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     const [isLoadingGroups, setIsLoadingGroups] = React.useState<boolean>(false);
 
     const [isScanning, setIsScanning] = React.useState<boolean>(false);
+
+    const customStyles = props.customCss ? <style dangerouslySetInnerHTML={{ __html: props.customCss }} /> : null;
 
     // Deep Scan State
     const [isDeepScanOpen, setIsDeepScanOpen] = React.useState<boolean>(false);
@@ -92,6 +101,53 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     // Storage Panel State
     const [isStoragePanelOpen, setIsStoragePanelOpen] = React.useState<boolean>(false);
 
+    // Orphan Panel State
+    const [isOrphanPanelOpen, setIsOrphanPanelOpen] = React.useState<boolean>(false);
+    const [orphanedUsersList, setOrphanedUsersList] = React.useState<IRoleAssignment[]>([]);
+    const [isRemovingOrphan, setIsRemovingOrphan] = React.useState<boolean>(false);
+
+    // Governance State
+    const [externalUsers, setExternalUsers] = React.useState<IUser[]>([]);
+    const [sharingLinks, setSharingLinks] = React.useState<ISharingInfo[]>([]);
+    const [orphanedUsers, setOrphanedUsers] = React.useState<IUser[]>([]);
+    const [isGovernanceLoading, setIsGovernanceLoading] = React.useState<boolean>(false);
+
+    // Folder Oversharing State
+    const [isFolderPanelOpen, setIsFolderPanelOpen] = React.useState<boolean>(false);
+    const [folderResults, setFolderResults] = React.useState<IOversharedFolder[]>([]);
+    const [isFolderScanning, setIsFolderScanning] = React.useState<boolean>(false);
+    const [isScanContentsLoading, setIsScanContentsLoading] = React.useState<boolean>(false);
+    const [folderScanListName, setFolderScanListName] = React.useState<string>('');
+    const [folderScanListId, setFolderScanListId] = React.useState<string>('');
+
+
+    const handleScanContents = async (folderUrl: string) => {
+        if (!permissionService || !permissionService.scanFolderContents) {
+            console.error("scanFolderContents not available");
+            return;
+        }
+
+        setIsScanContentsLoading(true);
+        try {
+            const newResults = await permissionService.scanFolderContents(folderUrl);
+            if (newResults && newResults.length > 0) {
+                // Append new results to existing results, avoiding duplicates by Path
+                setFolderResults(prev => {
+                    const existingPaths = new Set(prev.map(p => p.Path));
+                    const uniqueNew = newResults.filter(n => !existingPaths.has(n.Path));
+                    return [...prev, ...uniqueNew];
+                });
+            } else {
+                // Should we notify if nothing found? 
+                // For now, let's just log it.
+                console.log("No overshared items found in content scan.");
+            }
+        } catch (error) {
+            console.error("Error scanning folder contents", error);
+        } finally {
+            setIsScanContentsLoading(false);
+        }
+    };
     const showConfirmDialog = (title: string, subText: string, onConfirm: () => void, onCancel?: () => void) => {
         setDeleteConfirmState({
             isOpen: true,
@@ -102,12 +158,22 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         });
     };
 
+
     React.useEffect(() => {
+        console.log("PermissionViewer component mounting... v1.0.1");
+        /*
+        try {
+            injectGlobalStyles(); // Apply CSS overrides
+        } catch (e) {
+            console.error("Failed to inject global styles", e);
+        }
+        */
+
         let service: IPermissionService;
         if (props.useMockData) {
             service = new MockPermissionService();
         } else {
-            service = new PermissionService(props.spHttpClient, props.webUrl);
+            service = new PermissionService(props.spHttpClient, props.webUrl, props.msGraphClientFactory);
         }
         setPermissionService(service);
         checkAccessAndLoad(service);
@@ -260,6 +326,38 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
         setFilteredLists(listsData);
 
         setIsLoading(false);
+
+        // Load Governance Data (External Users, Sharing Links, Orphans)
+        void loadGovernanceData(service);
+
+        // Check for orphans in cache and update status immediately if known
+        if (service) {
+            service.checkOrphansForRoleAssignments(sitePerms).then(updated => {
+                setSitePermissions([...updated]);
+                setFilteredSitePermissions([...updated]);
+            });
+        }
+    };
+
+    const loadGovernanceData = async (service?: IPermissionService) => {
+        const srv = service || permissionService;
+        if (!srv) return;
+
+        setIsGovernanceLoading(true);
+        try {
+            const [external, links, orphaned] = await Promise.all([
+                srv.getExternalUsers(),
+                srv.getSharingLinks(),
+                srv.getOrphanedUsers()
+            ]);
+            setExternalUsers(external);
+            setSharingLinks(links);
+            setOrphanedUsers(orphaned);
+        } catch (error) {
+            console.error("Error loading governance data", error);
+        } finally {
+            setIsGovernanceLoading(false);
+        }
     };
 
     // handleRefresh removed as unused
@@ -274,7 +372,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity ?? 100}
                         title={props.webPartTitle}
-                        titleFontSize={props.webPartTitleFontSize}
+                        titleFontSize={props.webPartTitleFontSize ? `${props.webPartTitleFontSize}px` : undefined}
                         stats={stats}
                         siteUsage={siteUsage || undefined}
                         storageFormat={props.storageFormat}
@@ -345,10 +443,41 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
             }
             resolve(success);
         } catch (error) {
-            console.error("Error removing list permission", error);
             setErrorMessage("An unexpected error occurred while removing list permission.");
             resolve(false);
         }
+    };
+
+    const handleCheckSiteOrphans = async () => {
+        if (!permissionService) return;
+        setIsLoading(true);
+        setLoadingMessage("Checking for orphaned users...");
+        try {
+            // Check orphans for site permissions
+            const updated = await permissionService.checkOrphansForRoleAssignments(filteredSitePermissions);
+
+            // Force safe update by shallow cloning the role objects to trigger re-renders in DetailsList
+            const newPerms = updated.map(r => ({
+                ...r,
+                Member: { ...r.Member } // Shallow clone Member to ensure orphan status is picked up
+            }));
+
+            setFilteredSitePermissions(newPerms);
+            setSitePermissions(newPerms);
+
+            // Also refresh governance orphans to keep counts in sync
+            void loadGovernanceData();
+        } catch (error) {
+            console.error("Error checking site orphans", error);
+            setErrorMessage("Failed to check for orphaned users.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCheckOrphansList = async (listId: string, currentPerms: IRoleAssignment[]): Promise<IRoleAssignment[]> => {
+        if (!permissionService) return currentPerms;
+        return await permissionService.checkOrphansForRoleAssignments(currentPerms);
     };
 
     const showRemoveListPermissionConfirm = (listId: string, principalId: number, principalName: string, resolve: (value: boolean | PromiseLike<boolean>) => void) => {
@@ -442,19 +571,103 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
     };
 
     const toggleGroupExpansion = async (groupId: number) => {
-        if (expandedGroupId === groupId) {
+        const isExpanded = expandedGroupId === groupId;
+        if (isExpanded) {
             setExpandedGroupId(null);
-            return;
-        }
+        } else {
+            setExpandedGroupId(groupId);
+            if (!groupMembers[groupId] && permissionService) {
+                try {
+                    // Load members
+                    const members = await permissionService.getGroupMembers(groupId);
+                    console.log(`[PermissionViewer] Loaded members for group ${groupId}:`, members.map(m => ({ Title: m.Title, Type: m.PrincipalType, Id: m.Id })));
+                    setGroupMembers(prev => ({ ...prev, [groupId]: members }));
 
-        setExpandedGroupId(groupId);
-        if (!groupMembers[groupId] && permissionService) {
-            try {
-                const members = await permissionService.getGroupMembers(groupId);
-                setGroupMembers(prev => ({ ...prev, [groupId]: members }));
-            } catch (error) {
-                console.error("Error loading group members", error);
+                    // Check for orphans in background
+                    const orphans = await permissionService.checkOrphanUsers(members);
+                    console.log(`[PermissionViewer] Orphans found for group ${groupId}:`, orphans);
+
+                    if (orphans.length > 0) {
+                        const orphanMap = new Map(orphans.map(o => [o.Id, o.OrphanStatus]));
+                        setGroupMembers(prev => {
+                            const currentMembers = prev[groupId] || [];
+                            const updatedMembers = currentMembers.map(m => {
+                                if (orphanMap.has(m.Id)) {
+                                    return { ...m, OrphanStatus: orphanMap.get(m.Id) };
+                                }
+                                return m;
+                            });
+                            return { ...prev, [groupId]: updatedMembers };
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error loading group members or checking orphans", error);
+                }
             }
+        }
+    };
+
+    const handleRemoveOrphanedUser = async (user: IUser) => {
+        if (!permissionService) return;
+        setIsRemovingOrphan(true);
+        try {
+            // Check if user is in a group (PrincipalType 8) or direct
+            // But here we are dealing with Site Permissions which are usually direct or groups.
+            // If the orphan is a user inside a group, we need to know the group ID.
+            // However, our orphanedUsersList comes from Site Permissions which are RoleAssignments.
+            // If the RoleAssignment IS the user, we just remove the permission.
+            // If the RoleAssignment is a GROUP that contains the user... wait.
+            // handleCheckSiteOrphans checks filteredSitePermissions.
+            // If a User is directly assigned, they are a RoleAssignment.
+            // If a User is in a group, they are NOT in filteredSitePermissions (only the group is).
+            // SO: This feature currently only detects DIRECTLY assigned orphaned users. 
+
+            // TO DO: If we want to detect orphans inside groups, we need to expand all groups first.
+            // For now, let's assume direct permissions.
+
+            // We prioritize removing from User Info List as this removes the user from the site entirely,
+            // including any direct permissions or group memberships.
+
+            // Try removing from User Info List first
+            let success = await permissionService.removeUserFromUserInfoList(user.Id);
+
+            if (!success) {
+                console.warn("Removing from User Info List failed. Trying to remove direct Role Assignment if exists...");
+                // Fallback: Try removing direct site permission just in case
+                const roleSuccess = await permissionService.removeSitePermission(user.Id);
+                // If this worked, we can consider it a partial success at least (removed permissions)
+                // But for "orphan cleanup" we really want them gone. 
+                // However, let's treat it as success if we removed permissions.
+                if (roleSuccess) success = true;
+            }
+
+            if (success) {
+                // Ensure even if we only removed permissions (and not UserInfoList item), we hide them from this session
+                permissionService.maskOrphanedUser(user.Id);
+
+                // Update lists
+                const updatedOrphans = orphanedUsersList.filter(u => u.Member.Id !== user.Id);
+                setOrphanedUsersList(updatedOrphans);
+
+                // Refresh main permissions
+                const sitePerms = await permissionService.getSiteRoleAssignments();
+                setSitePermissions(sitePerms);
+                setFilteredSitePermissions(sitePerms);
+
+                if (updatedOrphans.length === 0) {
+                    setIsOrphanPanelOpen(false);
+                }
+
+                // Refresh governance data to update dashboard counts
+                void loadGovernanceData();
+            } else {
+                alert("Failed to remove user. They might be a System Account or protected.");
+            }
+        } catch (error) {
+            console.error("Error removing orphaned user", error);
+            alert("Error removing user.");
+        } finally {
+            setIsRemovingOrphan(false);
         }
     };
 
@@ -478,6 +691,61 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
 
     // ...
+
+    const handleCheckFolders = async (listId: string) => {
+        if (!permissionService) return;
+        const list = lists.find(l => l.Id === listId);
+        if (!list) return;
+
+        setFolderScanListName(list.Title);
+        setFolderScanListId(listId);
+        setFolderResults([]);
+        setIsFolderPanelOpen(true);
+        setIsFolderScanning(true);
+
+        try {
+            const results = await permissionService.checkOversharingFolders(listId);
+            setFolderResults(results);
+        } catch (error) {
+            console.error("Error checking folders", error);
+        } finally {
+            setIsFolderScanning(false);
+        }
+    };
+
+    const handleCheckRootItems = async (listId?: string) => {
+        // Handle if called via event or without args
+        const targetId = (typeof listId === 'string') ? listId : folderScanListId;
+
+        if (!permissionService || !targetId) return;
+
+        // If called with a specific ID (from List Card), open the panel and set context
+        if (typeof listId === 'string') {
+            const list = lists.find(l => l.Id === listId);
+            if (list) {
+                setFolderScanListName(list.Title);
+                setFolderScanListId(listId);
+                setIsFolderPanelOpen(true);
+            }
+        }
+
+        setIsFolderScanning(true);
+        setFolderResults([]);
+
+        try {
+            // Check if method exists (it might not on MockService if not updated, or old interface)
+            if (permissionService.checkOversharingRootItems) {
+                const results = await permissionService.checkOversharingRootItems(targetId);
+                setFolderResults(results);
+            } else {
+                console.error("checkOversharingRootItems not implemented in service");
+            }
+        } catch (error) {
+            console.error("Error checking root items", error);
+        } finally {
+            setIsFolderScanning(false);
+        }
+    };
 
     const handleDeepScan = async (listId: string) => {
         const list = lists.find(l => l.Id === listId);
@@ -570,9 +838,23 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                 {
                     name: 'Check Access',
                     url: '',
-                    key: 'check_access',
+                    key: 'check_access', // Keep key consistent
                     icon: 'UserOptional',
                     onClick: () => { setActiveTab('check_access'); }
+                },
+                {
+                    name: 'Deep Clean',
+                    url: '',
+                    key: 'deep_clean',
+                    icon: 'Broom',
+                    onClick: () => { setActiveTab('deep_clean'); }
+                },
+                {
+                    name: 'Public Access',
+                    url: '',
+                    key: 'public_access',
+                    icon: 'World',
+                    onClick: () => { setActiveTab('public_access'); }
                 },
                 {
                     name: 'Site Admins',
@@ -587,11 +869,12 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
     return (
         <div className={styles.permissionViewer} style={{ '--content-font-size': props.contentFontSize || '14px' } as React.CSSProperties}>
+            {customStyles}
             <div className={styles.webpartContainer}>
                 {(props.showComponentHeader !== false) && (
                     <Header
                         title={props.webPartTitle}
-                        titleFontSize={props.webPartTitleFontSize}
+                        titleFontSize={props.webPartTitleFontSize ? `${props.webPartTitleFontSize}px` : undefined}
                         themeVariant={props.themeVariant}
                         opacity={props.headerOpacity}
                         stats={stats}
@@ -621,7 +904,8 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                 <PivotItem headerText="Site Permissions" itemKey="site" itemIcon="Shield" />
                                 <PivotItem headerText="Lists & Libraries" itemKey="lists" itemIcon="List" />
                                 {(props.showSecurityGovernanceTab !== false) && <PivotItem headerText="Security & Governance" itemKey="governance" itemIcon="SecurityGroup" />}
-                                <PivotItem headerText="Site Groups" itemKey="groups" itemIcon="Group" />
+                                <PivotItem headerText="Deep Clean" itemKey="deep_clean" itemIcon="Broom" />
+                                <PivotItem headerText="Public Access" itemKey="public_access" itemIcon="World" />
                                 <PivotItem headerText="Check Access" itemKey="check_access" itemIcon="UserOptional" />
                                 <PivotItem headerText="Site Admins" itemKey="admins" itemIcon="Admin" />
                             </Pivot>
@@ -687,6 +971,7 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                     onRemovePermission={handleRemoveSitePermission}
                                     onRemoveFromGroup={handleRemoveFromGroup}
                                     siteGroups={siteGroups}
+                                    onCheckOrphans={handleCheckSiteOrphans}
                                 />
                             )}
 
@@ -695,10 +980,11 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                     lists={filteredLists}
                                     getListPermissions={handleGetListPermissions}
                                     onScanItems={handleDeepScan}
+                                    onCheckFolders={handleCheckFolders}
+                                    onRemovePermission={handleRemoveListPermission}
                                     themeVariant={props.themeVariant}
                                     buttonFontSize={props.buttonFontSize}
                                     contentFontSize={props.contentFontSize}
-                                    onRemovePermission={handleRemoveListPermission}
                                     forcedExpandedListId={null}
                                 />
                             )}
@@ -724,10 +1010,25 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                             {!isLoading && activeTab === 'governance' && (
                                 <SecurityGovernance
                                     contentFontSize={props.contentFontSize}
-                                    permissionService={permissionService!}
                                     showExternalUserAudit={props.showExternalUserAudit}
                                     showSharingLinks={props.showSharingLinks}
                                     showOrphanedUsers={props.showOrphanedUsers}
+                                    externalUsers={externalUsers}
+                                    sharingLinks={sharingLinks}
+                                    orphanedUsers={orphanedUsers}
+                                    isLoading={isGovernanceLoading}
+                                    onOpenOrphanPanel={(users: IUser[]) => {
+                                        // Convert IUser[] to IRoleAssignment[] structure for the panel
+                                        // This assumes direct assignment context isn't strictly needed for simple display/removal
+                                        const roleAssignments: IRoleAssignment[] = users.map(u => ({
+                                            PrincipalId: u.Id,
+                                            Member: u,
+                                            RoleDefinitionBindings: [] // Information lost here, but acceptable for removal panel
+                                        }));
+                                        setOrphanedUsersList(roleAssignments);
+                                        setIsOrphanPanelOpen(true);
+                                    }}
+                                    onRefresh={() => void loadGovernanceData(permissionService)}
                                 />
                             )}
 
@@ -735,6 +1036,21 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                 <SiteAdmins
                                     users={siteAdmins}
                                     isLoading={isLoadingAdmins}
+                                />
+                            )}
+
+                            {activeTab === 'deep_clean' && permissionService && (
+                                <DeepClean
+                                    permissionService={permissionService}
+                                    lists={lists}
+                                    contentFontSize={props.contentFontSize}
+                                />
+                            )}
+                            {activeTab === 'public_access' && permissionService && (
+                                <PublicAccess
+                                    permissionService={permissionService}
+                                    lists={lists}
+                                    contentFontSize={props.contentFontSize}
                                 />
                             )}
                         </div>
@@ -749,6 +1065,24 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         buttonFontSize={props.buttonFontSize}
                         contentFontSize={props.contentFontSize}
                         onRemovePermission={handleRemoveDeepScanItemPermission}
+                    />
+
+                    <FolderOversharingPanel
+                        isOpen={isFolderPanelOpen}
+                        onDismiss={() => setIsFolderPanelOpen(false)}
+                        listName={folderScanListName}
+                        isScanning={isFolderScanning}
+                        results={folderResults}
+                        onCheckRootItems={handleCheckRootItems}
+                    />
+
+                    <OrphanedUsersPanel
+                        isOpen={isOrphanPanelOpen}
+                        onDismiss={() => setIsOrphanPanelOpen(false)}
+                        orphanedUsers={orphanedUsersList}
+                        onRemoveUser={handleRemoveOrphanedUser}
+                        isRemoving={isRemovingOrphan}
+                        contentFontSize={props.contentFontSize}
                     />
 
                     <Dialog
@@ -945,7 +1279,21 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                                                         }}>
                                                             <Icon iconName="Contact" style={{ fontSize: 14, color: '#605e5c' }} />
                                                             <div>
-                                                                <div style={{ fontSize: 13 }}>{member.Title}</div>
+                                                                <div style={{ fontSize: 13, display: 'flex', alignItems: 'center' }}>
+                                                                    {member.Title}
+                                                                    {member.OrphanStatus && (
+                                                                        <span style={{
+                                                                            background: '#fde7e9',
+                                                                            color: '#d13438',
+                                                                            fontSize: 10,
+                                                                            padding: '1px 5px',
+                                                                            borderRadius: 4,
+                                                                            fontWeight: 600,
+                                                                            border: '1px solid #d13438',
+                                                                            marginLeft: 6
+                                                                        }}>{member.OrphanStatus}</span>
+                                                                    )}
+                                                                </div>
                                                                 <div style={{ fontSize: 11, color: '#666' }}>{member.Email}</div>
                                                             </div>
                                                         </div>
@@ -958,6 +1306,17 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         </div>
                     </Panel>
 
+                    <FolderOversharingPanel
+                        isOpen={isFolderPanelOpen}
+                        onDismiss={() => setIsFolderPanelOpen(false)}
+                        listName={folderScanListName}
+                        isScanning={isFolderScanning}
+                        results={folderResults}
+                        onCheckRootItems={() => void handleCheckRootItems()}
+                        onScanContents={handleScanContents}
+                        isScanContentsLoading={isScanContentsLoading}
+                    />
+
                     <Panel
                         isOpen={isStoragePanelOpen}
                         onDismiss={() => setIsStoragePanelOpen(false)}
@@ -966,6 +1325,13 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
                         headerText="Storage Metrics"
                         closeButtonAriaLabel="Close"
                     >
+                        <div style={{ marginBottom: 15, display: 'flex', justifyContent: 'flex-end', paddingRight: 20 }}>
+                            <PrimaryButton
+                                text="Download CSV"
+                                iconProps={{ iconName: 'Download' }}
+                                onClick={() => exportStorageMetrics(lists, siteUsage)}
+                            />
+                        </div>
                         {siteUsage && (
                             <div style={{ marginBottom: 20, padding: '15px', background: '#f8f9fa', borderRadius: '4px' }}>
                                 {siteUsage.storageQuota > 0 ? (
@@ -1002,53 +1368,57 @@ const PermissionViewer: React.FunctionComponent<IPermissionViewerProps> = (props
 
                         <p>Storage breakdown by list/library (top items):</p>
 
-                        <table className={styles.permissionTable} style={{ marginTop: 20 }}>
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '40%' }}>Name</th>
-                                    <th style={{ width: '20%' }}>Total Size</th>
-                                    <th style={{ width: '20%' }}>% of Site</th>
-                                    <th style={{ width: '20%' }}>Last Modified</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {[...lists]
-                                    .sort((a, b) => (b.TotalSize || 0) - (a.TotalSize || 0))
-                                    .map(list => {
-                                        const size = list.TotalSize || 0;
-                                        const percent = siteUsage && siteUsage.storageUsed > 0 ? (size / siteUsage.storageUsed) * 100 : 0;
-                                        return (
-                                            <tr key={list.Id}>
-                                                <td>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                        <Icon iconName={list.ItemType === 'Library' ? 'DocLibrary' : 'List'} style={{ color: '#0078d4' }} />
-                                                        <div>
-                                                            <div style={{ fontWeight: 600 }}>{list.Title}</div>
-                                                            <div style={{ fontSize: 11, color: '#666' }}>{list.ItemCount} items</div>
+                        <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                            <table className={styles.permissionTable} style={{ marginTop: 20, width: '100%' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '40%' }}>Name</th>
+                                        <th style={{ width: '20%' }}>Total Size</th>
+                                        <th style={{ width: '20%' }}>% of Site</th>
+                                        <th style={{ width: '20%' }}>Last Modified</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...lists]
+                                        .sort((a, b) => (b.TotalSize || 0) - (a.TotalSize || 0))
+                                        .slice(0, 50)
+                                        .map(list => {
+                                            const size = list.TotalSize || 0;
+                                            const percent = siteUsage && siteUsage.storageUsed > 0 ? (size / siteUsage.storageUsed) * 100 : 0;
+                                            const itemIcon = list.ItemType === 'Library' ? 'DocLibrary' : 'List';
+                                            return (
+                                                <tr key={list.Id}>
+                                                    <td>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                            <Icon iconName={itemIcon} style={{ color: '#0078d4' }} />
+                                                            <div>
+                                                                <div style={{ fontWeight: 600 }}>{list.Title}</div>
+                                                                <div style={{ fontSize: 11, color: '#666' }}>{list.ItemCount} items</div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td>{formatBytes(size, 2, props.storageFormat)}</td>
-                                                <td>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                        <div style={{ flex: 1, height: 4, background: '#f3f2f1', borderRadius: 2, maxWidth: 50 }}>
-                                                            <div style={{ height: '100%', width: `${Math.min(percent, 100)}%`, background: '#0078d4' }} />
+                                                    </td>
+                                                    <td>{formatBytes(size, 2, props.storageFormat)}</td>
+                                                    <td>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <div style={{ flex: 1, height: 4, background: '#f3f2f1', borderRadius: 2, maxWidth: 50 }}>
+                                                                <div style={{ height: '100%', width: `${Math.min(percent, 100)}%`, background: '#0078d4' }} />
+                                                            </div>
+                                                            <span style={{ fontSize: 11 }}>{percent < 0.1 && percent > 0 ? '<0.1' : percent.toFixed(1)}%</span>
                                                         </div>
-                                                        <span style={{ fontSize: 11 }}>{percent < 0.1 && percent > 0 ? '<0.1' : percent.toFixed(1)}%</span>
-                                                    </div>
-                                                </td>
-                                                <td style={{ fontSize: 12 }}>
-                                                    {list.LastItemModifiedDate ? new Date(list.LastItemModifiedDate).toLocaleDateString() : '-'}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                            </tbody>
-                        </table>
+                                                    </td>
+                                                    <td style={{ fontSize: 12 }}>
+                                                        {list.LastItemModifiedDate ? new Date(list.LastItemModifiedDate).toLocaleDateString() : '-'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                </tbody>
+                            </table>
+                        </div>
                     </Panel>
-                </div >
-            </div >
-        </div >
+                </div>
+            </div>
+        </div>
     );
 };
 

@@ -61,6 +61,11 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
     const [userToDelete, setUserToDelete] = React.useState<IUser | null>(null);
     const [isDeleting, setIsDeleting] = React.useState<boolean>(false);
 
+    // AAD Expansion State
+    const [expandedMembers, setExpandedMembers] = React.useState<Set<string>>(new Set());
+    const [nestedMembers, setNestedMembers] = React.useState<Map<string, IUser[]>>(new Map());
+    const [loadingNested, setLoadingNested] = React.useState<Set<string>>(new Set());
+
     React.useEffect(() => {
         setFilteredGroups(props.groups);
     }, [props.groups]);
@@ -73,12 +78,13 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         setFilteredGroups(items);
     }, [showEmptyGroupsOnly, props.groups]);
 
-
-
     const onGroupClick = (group: IGroup) => {
         setSelectedGroup(group);
         setIsPanelOpen(true);
         loadGroupMembers(group.Id);
+        // Reset expansion state when opening a new group
+        setExpandedMembers(new Set());
+        setNestedMembers(new Map());
     };
 
     const loadGroupMembers = async (groupId: number) => {
@@ -87,10 +93,58 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         try {
             const members = await props.permissionService.getGroupMembers(groupId);
             setGroupMembers(members);
+
+            // Check for orphans in background
+            void props.permissionService.checkOrphanUsers(members).then(orphans => {
+                console.log("[SiteGroups] Orphans found:", orphans);
+                if (orphans.length > 0) {
+                    const orphanMap = new Map(orphans.map(o => [o.Id, o.OrphanStatus]));
+                    setGroupMembers(prev => prev.map(m => {
+                        if (orphanMap.has(m.Id)) {
+                            return { ...m, OrphanStatus: orphanMap.get(m.Id) };
+                        }
+                        return m;
+                    }));
+                }
+            });
         } catch (error) {
             console.error("Error loading members", error);
         } finally {
             setIsLoadingMembers(false);
+        }
+    };
+
+    const toggleExpandMember = async (member: IUser) => {
+        const memberKey = member.LoginName || member.Id.toString();
+        const isExpanded = expandedMembers.has(memberKey);
+
+        const newExpanded = new Set(expandedMembers);
+        if (isExpanded) {
+            newExpanded.delete(memberKey);
+            setExpandedMembers(newExpanded);
+        } else {
+            newExpanded.add(memberKey);
+            setExpandedMembers(newExpanded);
+
+            if (!nestedMembers.has(memberKey)) {
+                // Fetch nested members
+                const newLoading = new Set(loadingNested);
+                newLoading.add(memberKey);
+                setLoadingNested(newLoading);
+
+                try {
+                    const nested = await props.permissionService.getAADGroupMembers(member.LoginName || "", member.Title);
+                    setNestedMembers(prev => new Map(prev).set(memberKey, nested));
+                } catch (error) {
+                    console.error("Error expanding AAD group", error);
+                } finally {
+                    setLoadingNested(prev => {
+                        const next = new Set(prev);
+                        next.delete(memberKey);
+                        return next;
+                    });
+                }
+            }
         }
     };
 
@@ -106,7 +160,6 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
         try {
             const success = await props.permissionService.removeUserFromGroup(selectedGroup.Id, userToDelete.Id);
             if (success) {
-                // Remove from local state to avoid full reload
                 setGroupMembers(prev => prev.filter(u => u.Id !== userToDelete.Id));
                 setIsDeleteDialogHidden(true);
                 setUserToDelete(null);
@@ -190,8 +243,6 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
                 />
             </Stack>
 
-
-
             {props.isLoading ? (
                 <Spinner size={SpinnerSize.large} label="Loading site groups..." />
             ) : (
@@ -224,29 +275,93 @@ export const SiteGroups: React.FunctionComponent<ISiteGroupsProps> = (props) => 
                         {groupMembers.length === 0 ? (
                             <Text>No members in this group.</Text>
                         ) : (
-                            groupMembers.map(member => (
-                                <div key={member.Id || member.LoginName} style={{ display: 'flex', alignItems: 'center', padding: '10px', borderBottom: '1px solid #eee' }}>
-                                    <Persona
-                                        text={member.Title}
-                                        secondaryText={member.Email}
-                                        size={PersonaSize.size40}
-                                        showSecondaryText={true}
-                                    />
-                                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontSize: '12px', color: '#666' }}>
-                                            {member.PrincipalType === 1 ? 'User' : 'Group'}
-                                        </span>
-                                        <IconButton
-                                            iconProps={{ iconName: 'Delete' }}
-                                            title="Remove User"
-                                            ariaLabel="Remove User"
-                                            disabled={isDeleting}
-                                            onClick={() => onDeleteUserClick(member)}
-                                            styles={{ root: { color: '#a80000', '&:hover': { color: '#d80000' } } }}
-                                        />
+                            groupMembers.map(member => {
+                                const memberKey = member.LoginName || member.Id.toString();
+                                const isExpanded = expandedMembers.has(memberKey);
+                                const isLoading = loadingNested.has(memberKey);
+                                const nested = nestedMembers.get(memberKey) || [];
+                                // Check if expandable: PrincipalType 4 (Security Group) or 1 (User - potentially a group claim)
+                                // We'll allow expansion for Type 4 and Type 1 if title looks like a group or we just want to allow trying.
+                                // Safer to restrict to known types or provide visual cue.
+                                // Let's allow expanding Type 4 and Type 8 (if nested SP group - though usually they are flattened or not supported).
+                                // Graph expansion specifically targets AAD groups (Type 4).
+                                const canExpand = member.PrincipalType === 4 || member.PrincipalType === 1;
+
+                                return (
+                                    <div key={memberKey} style={{ borderBottom: '1px solid #eee' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', padding: '10px' }}>
+                                            {canExpand && (
+                                                <IconButton
+                                                    iconProps={{ iconName: isExpanded ? 'ChevronDown' : 'ChevronRight' }}
+                                                    title="Expand Group"
+                                                    disabled={isLoading}
+                                                    onClick={() => toggleExpandMember(member)}
+                                                    styles={{ root: { marginRight: 5, height: 24, width: 24 } }}
+                                                />
+                                            )}
+                                            {!canExpand && <div style={{ width: 29 }} />} {/* Spacer */}
+
+                                            <Persona
+                                                text={member.Title}
+                                                secondaryText={member.Email}
+                                                size={PersonaSize.size40}
+                                                showSecondaryText={true}
+                                            />
+                                            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {member.OrphanStatus && (
+                                                    <span style={{
+                                                        background: '#fde7e9',
+                                                        color: '#d13438',
+                                                        fontSize: 10,
+                                                        padding: '2px 6px',
+                                                        borderRadius: 4,
+                                                        fontWeight: 600,
+                                                        border: '1px solid #d13438',
+                                                        marginRight: 8
+                                                    }}>{member.OrphanStatus}</span>
+                                                )}
+                                                <span style={{ fontSize: '12px', color: '#666' }}>
+                                                    {member.PrincipalType === 1 ? 'User' : (member.PrincipalType === 4 ? 'Security Group' : 'Group')}
+                                                </span>
+                                                <IconButton
+                                                    iconProps={{ iconName: 'Delete' }}
+                                                    title="Remove User"
+                                                    ariaLabel="Remove User"
+                                                    disabled={isDeleting}
+                                                    onClick={() => onDeleteUserClick(member)}
+                                                    styles={{ root: { color: '#a80000', '&:hover': { color: '#d80000' } } }}
+                                                />
+                                            </div>
+                                        </div>
+                                        {isExpanded && (
+                                            <div style={{ paddingLeft: 40, paddingBottom: 10, background: '#fafafa' }}>
+                                                {isLoading ? (
+                                                    <Spinner size={SpinnerSize.xSmall} label="Loading nested members..." />
+                                                ) : (
+                                                    nested.length === 0 ? (
+                                                        <Text variant="small" style={{ fontStyle: 'italic' }}>No members found or not a valid AAD group.</Text>
+                                                    ) : (
+                                                        <Stack tokens={{ childrenGap: 5 }}>
+                                                            {nested.map((nm, idx) => ( // Nested members
+                                                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                                    <Persona
+                                                                        text={nm.Title}
+                                                                        secondaryText={nm.Email}
+                                                                        size={PersonaSize.size24}
+                                                                        showSecondaryText={false}
+                                                                    />
+                                                                    <Text variant="small">{nm.Email}</Text>
+                                                                    {nm.OrphanStatus && <span style={{ color: 'red', fontSize: 10 }}>({nm.OrphanStatus})</span>}
+                                                                </div>
+                                                            ))}
+                                                        </Stack>
+                                                    )
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </Stack>
                 )}

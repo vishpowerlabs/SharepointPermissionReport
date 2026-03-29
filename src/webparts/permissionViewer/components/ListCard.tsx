@@ -15,6 +15,10 @@ export interface IListCardProps {
     onScanItems?: (listId: string) => void;
     themeVariant: IReadonlyTheme | undefined;
     onRemovePermission?: (principalId: number, principalName: string) => void;
+    onCheckOrphans?: (listId: string) => void;
+    onCheckFolders?: (listId: string) => void;
+    onCheckRootItems?: (listId: string) => void;
+
 
     buttonFontSize?: string;
     contentFontSize?: string;
@@ -112,6 +116,73 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                             🔍 Deep Scan
                         </button>
                     )}
+                    {props.onCheckOrphans && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); props.onCheckOrphans!(list.Id); }}
+                            style={{
+                                background: 'transparent',
+                                border: `1px solid ${primaryColor}`,
+                                color: primaryColor,
+                                padding: '4px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: props.buttonFontSize || '12px',
+                                fontWeight: 600,
+                                width: '130px',
+                                minWidth: '130px',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                            }}
+                            title="Check for orphaned users in this list's permissions">
+                            👻 Check Orphans
+                        </button>
+                    )}
+                    {props.onCheckFolders && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); props.onCheckFolders!(list.Id); }}
+                            style={{
+                                background: 'transparent',
+                                border: `1px solid ${primaryColor}`,
+                                color: primaryColor,
+                                padding: '4px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: props.buttonFontSize || '12px',
+                                fontWeight: 600,
+                                width: '130px',
+                                minWidth: '130px',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                            }}
+                            title="Check for folders shared with Everyone">
+                            📂 Check Folders
+                        </button>
+                    )}
+                    {props.onCheckRootItems && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); props.onCheckRootItems!(list.Id); }}
+                            style={{
+                                background: 'transparent',
+                                border: `1px solid ${primaryColor}`,
+                                color: primaryColor,
+                                padding: '4px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: props.buttonFontSize || '12px',
+                                fontWeight: 600,
+                                width: '130px',
+                                minWidth: '130px',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                            }}
+                            title="Check ONLY root files/folders for 'Everyone' (Shallow Scan)">
+                            ⚡ Check Root
+                        </button>
+                    )}
+
                     <PermissionBadge permission={list.HasUniqueRoleAssignments ? 'Unique' : 'Inherited'} isInheritanceStatus={true} fontSize={props.buttonFontSize} />
                 </div>
             </div>
@@ -119,11 +190,13 @@ export const ListCard: React.FunctionComponent<IListCardProps> = (props) => {
                 {list.ServerRelativeUrl}
             </div>
 
-            {isExpanded && (
-                <div className="list-permissions-content">
-                    {renderPermissionsContent()}
-                </div>
-            )}
-        </div>
+            {
+                isExpanded && (
+                    <div className="list-permissions-content">
+                        {renderPermissionsContent()}
+                    </div>
+                )
+            }
+        </div >
     );
 };

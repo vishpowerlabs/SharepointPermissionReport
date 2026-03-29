@@ -56,14 +56,7 @@ export const Header: React.FunctionComponent<IHeaderProps> = (props) => {
 
             {props.stats && (
                 <div className={styles.headerStats}>
-                    <button
-                        className={styles.headerStatBtn}
-                        onClick={props.onGroupsClick}
-                        style={{ fontSize: props.contentFontSize || '13px' }}
-                    >
-                        <Icon iconName="People" />
-                        <span>{props.stats.totalGroups}</span>
-                    </button>
+
                     <button
                         className={styles.headerStatBtn}
                         onClick={props.onUniquePermissionsClick}

@@ -1,5 +1,15 @@
 @import '~@fluentui/react/dist/sass/References';
 
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .permissionViewer {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 
@@ -501,6 +511,25 @@
   .govBtn {
     width: 100%;
     margin-top: auto;
+  }
+
+  .panelHeader {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px 24px;
+    border-bottom: 1px solid "[theme: neutralLight, default: #e1dfdd]";
+  }
+
+  .panelCloseIcon {
+    font-size: 16px;
+    color: "[theme: neutralSecondary, default: #605e5c]";
+    cursor: pointer;
+    margin-left: 16px;
+
+    &:hover {
+      color: "[theme: bodyText, default: #323130]";
+    }
   }
 }
 

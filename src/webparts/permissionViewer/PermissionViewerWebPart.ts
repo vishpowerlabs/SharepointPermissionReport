@@ -54,6 +54,7 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
             PermissionViewer,
             {
                 spHttpClient: this.context.spHttpClient,
+                msGraphClientFactory: this.context.msGraphClientFactory,
                 webUrl: this.context.pageContext.web.absoluteUrl,
                 themeVariant: this._themeVariant,
                 headerOpacity: this.properties.headerOpacity,
@@ -72,7 +73,8 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                 showOrphanedUsers: this.properties.showOrphanedUsers,
                 showSecurityGovernanceTab: this.properties.showSecurityGovernanceTab,
                 navLayout: this.properties.navLayout || 'left', // Default to left
-                storageFormat: this.properties.storageFormat || 'Auto'
+                storageFormat: this.properties.storageFormat || 'Auto',
+                customCss: this.properties.customCss
             }
         );
 
@@ -148,6 +150,12 @@ export default class PermissionViewerWebPart extends BaseClientSideWebPart<IPerm
                                     min: 0,
                                     max: 100,
                                     value: 100
+                                }),
+                                PropertyPaneTextField('customCss', {
+                                    label: "Custom CSS",
+                                    multiline: true,
+                                    rows: 5,
+                                    description: "Inject custom CSS to override styles (e.g., width: 100% !important)"
                                 })
                             ]
                         },

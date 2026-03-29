@@ -7,6 +7,8 @@ export interface IUser {
     PrincipalType: number;
     IsSiteAdmin?: boolean;
     IsSiteOwner?: boolean;
+    OrphanStatus?: 'Deleted' | 'Disabled' | 'Active';
+    UserPrincipalName?: string;
 }
 
 export interface IGroup {
@@ -87,26 +89,57 @@ export interface IRoleDefinitionDetail {
     RoleTypeKind: number;
 }
 
+
+
 export interface ICommonProps {
+    webPartTitle: string;
+    // ... other props
+    webPartTitleFontSize?: number;
     headerOpacity?: number;
-    showStats?: boolean;
-    excludedLists?: string[];
-    buttonFontSize?: string;
-    showComponentHeader?: boolean;
-    webPartTitle?: string;
-    webPartTitleFontSize?: string;
+    themeVariant?: any;
+    storageFormat?: 'MB' | 'GB' | 'Auto';
     contentFontSize?: string;
-    simulateAccessDenied?: boolean;
+    showComponentHeader?: boolean;
+    navLayout?: 'left' | 'top';
+
+    // Mock data
     useMockData?: boolean;
+    simulateAccessDenied?: boolean;
+
+    // Config
+    excludedLists?: string[];
+    showSecurityGovernanceTab?: boolean;
+    customCss?: string;
+    showStats?: boolean;
+    buttonFontSize?: string;
     showExternalUserAudit?: boolean;
     showSharingLinks?: boolean;
     showOrphanedUsers?: boolean;
-    showSecurityGovernanceTab?: boolean;
-    navLayout?: 'left' | 'top';
-    storageFormat?: 'Auto' | 'MB' | 'GB' | 'TB';
 }
 
 export interface IPermissionViewerWebPartProps extends ICommonProps {
     description: string;
 }
 
+export interface IPublicAccessResult {
+    key: string;
+    listName: string;
+    listId: string;
+    itemId?: number;
+    itemName: string;
+    itemUrl: string;
+    scope: 'List' | 'Item' | 'Folder';
+    principalName: string;
+    principalType: string; // 'Everyone', 'Anonymous', 'Authenticated'
+    roles: string[];
+}
+
+
+export interface IOversharedFolder {
+    Name: string;
+    Path: string;
+    SharedWith: string;
+    LoginName?: string;
+    Permissions: string;
+    PrincipalType?: number;
+}

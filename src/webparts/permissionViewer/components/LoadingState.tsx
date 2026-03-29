@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Spinner, SpinnerSize } from '@fluentui/react/lib/Spinner';
 import styles from './PermissionViewer.module.scss';
-import { ProgressIndicator } from '@fluentui/react/lib/ProgressIndicator';
+import { ProgressIndicator, Stack, Text, FontWeights } from '@fluentui/react';
 
 export interface ILoadingStateProps {
     message: string;
@@ -10,15 +10,33 @@ export interface ILoadingStateProps {
 
 export const LoadingState: React.FunctionComponent<ILoadingStateProps> = (props) => {
     return (
-        <div className={styles.loadingState} style={{ textAlign: 'center', padding: '60px 32px' }}>
-            <Spinner size={SpinnerSize.large} styles={{ circle: { borderColor: '#0078d4' } }} />
-            <div className={styles.loadingText} style={{ fontSize: '16px', color: '#605e5c', margin: '12px 0' }}>{props.message}</div>
-            <div style={{ width: '300px', margin: '20px auto' }}>
-                <ProgressIndicator percentComplete={props.progress} barHeight={4} />
-            </div>
-            <div style={{ fontSize: '14px', color: '#605e5c', marginTop: '16px' }}>
-                This may take a moment for sites with many lists...
-            </div>
-        </div>
+        <Stack
+            horizontalAlign="center"
+            verticalAlign="center"
+            tokens={{ childrenGap: 20 }}
+            styles={{
+                root: {
+                    padding: '80px 40px',
+                    minHeight: '300px',
+                    backgroundColor: '#faf9f8', // NeutralLighter
+                    borderRadius: '8px'
+                }
+            }}
+        >
+            <Spinner size={SpinnerSize.large} label={props.message} ariaLive="assertive" labelPosition="top" />
+
+            {props.progress !== undefined && (
+                <Stack styles={{ root: { width: '300px', maxWidth: '100%' } }}>
+                    <ProgressIndicator percentComplete={props.progress} barHeight={4} />
+                    <Text variant="small" styles={{ root: { marginTop: 8, textAlign: 'center', color: '#605e5c' } }}>
+                        {(props.progress * 100).toFixed(0)}% Complete
+                    </Text>
+                </Stack>
+            )}
+
+            <Text variant="small" styles={{ root: { color: '#605e5c', fontStyle: 'italic' } }}>
+                Use the "Stop Scan" button if this takes too long.
+            </Text>
+        </Stack>
     );
 };

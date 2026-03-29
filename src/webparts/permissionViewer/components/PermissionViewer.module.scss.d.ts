@@ -85,6 +85,10 @@ export interface IExportStyles {
 
   'navigationTop': string;
 
+  'panelCloseIcon': string;
+
+  'panelHeader': string;
+
   'permissionBadge': string;
 
   'permissionTable': string;
@@ -92,6 +96,8 @@ export interface IExportStyles {
   'permissionViewer': string;
 
   'searchBox': string;
+
+  'spin': string;
 
   'statCard': string;
 

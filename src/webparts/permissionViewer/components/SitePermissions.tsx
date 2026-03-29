@@ -15,6 +15,7 @@ export interface ISitePermissionsProps {
     onRemovePermission?: (principalId: number, principalName: string) => void;
     onRemoveFromGroup?: (groupId: number, userId: number, userName: string) => void;
     siteGroups?: IGroup[];
+    onCheckOrphans?: () => void;
 }
 
 const UserGroupCell: React.FunctionComponent<{
@@ -230,6 +231,20 @@ export const SitePermissions: React.FunctionComponent<ISitePermissionsProps> = (
 
     return (
         <div className={styles.content}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                {props.onCheckOrphans && (
+                    <IconButton
+                        iconProps={{ iconName: 'Search' }}
+                        text="Check for Orphans"
+                        title="Scan these permissions for orphaned users"
+                        onClick={props.onCheckOrphans}
+                        styles={{
+                            root: { color: '#0078d4' },
+                            label: { fontWeight: 600 }
+                        }}
+                    />
+                )}
+            </div>
             <div className={styles.permissionTable} style={{ border: '1px solid #e1dfdd', borderRadius: '4px', overflow: 'hidden' }}>
                 <DetailsList
                     items={displayItems}

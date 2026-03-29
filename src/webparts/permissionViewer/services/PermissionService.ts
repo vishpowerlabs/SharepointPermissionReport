@@ -1,15 +1,20 @@
-import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
+import { SPHttpClient, SPHttpClientResponse, MSGraphClientFactory } from '@microsoft/sp-http';
 import { IPermissionService } from './IPermissionService';
-import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo, ISiteUsage, IRoleDefinitionDetail } from '../models/IPermissionData';
+import { IRoleAssignment, IListInfo, ISiteStats, IUser, IItemPermission, IGroup, ISharingInfo, ISiteUsage, IRoleDefinitionDetail, IOversharedFolder } from '../models/IPermissionData';
 
 export class PermissionService implements IPermissionService {
     private readonly _spHttpClient: SPHttpClient;
     private readonly _webUrl: string;
+    private readonly _msGraphClientFactory?: MSGraphClientFactory;
+    private readonly _userOrphanCache: Map<string, 'Deleted' | 'Disabled' | 'Active'> = new Map();
+    private readonly _knownRemovedIds: Set<number> = new Set();
 
-    constructor(spHttpClient: SPHttpClient, webUrl: string) {
 
+    constructor(spHttpClient: SPHttpClient, webUrl: string, msGraphClientFactory?: MSGraphClientFactory) {
+        console.log(`[PermissionService] Constructor called. Instance created. WebUrl: ${webUrl}`);
         this._spHttpClient = spHttpClient;
         this._webUrl = webUrl;
+        this._msGraphClientFactory = msGraphClientFactory;
     }
 
     public async getSiteRoleAssignments(): Promise<IRoleAssignment[]> {
@@ -230,68 +235,129 @@ export class PermissionService implements IPermissionService {
         }
     }
 
-    public async getUniquePermissionItems(listId: string): Promise<IItemPermission[]> {
+    public async getUniquePermissionItems(listId: string, signal?: AbortSignal): Promise<IItemPermission[]> {
+        const results: IItemPermission[] = [];
         try {
-            // HasUniqueRoleAssignments is often not filterable in OData on items endpoint.
-            // Strategy: 
-            // 1. Fetch all items (up to 5000) with minimal fields including HasUniqueRoleAssignments.
-            // 2. Filter client-side.
-            // 3. For each unique item, fetch role assignments.
+            console.log(`Deep Scan: Starting scan for list ${listId} using GetItems (Recursive) + Batch Details`);
 
-            // Note: To ensure we get all items (recursive), we rely on 'items' returning them.
-            // Ideally we'd use CAML with Scope='RecursiveAll', but standard items endpoint usually returns items flat or based on default view.
-            // We'll trust 'items' for now but handle the filtering client side.
+            // 1. Fetch Basic Items using standard REST (Flat, Recursive by default for IDs)
+            // CRITICAL: Must use $orderby=ID asc to ensure we can paging past 5000 items (List View Threshold)
+            // standard REST default sort might not use the ID index efficiently for large lists.
+            let nextLink: string | undefined = `${this._webUrl}/_api/web/lists(guid'${listId}')/items?$select=ID,Title,FileRef,FileLeafRef,FSObjType,HasUniqueRoleAssignments&$top=2000&$orderby=ID asc`;
+            let hasMore = true;
+            const candidates: any[] = [];
 
-            const endpoint = `${this._webUrl}/_api/web/lists(guid'${listId}')/items?$select=Id,Title,FileRef,FileLeafRef,FileSystemObjectType,HasUniqueRoleAssignments&$top=5000`;
+            while (hasMore && nextLink) {
+                if (signal?.aborted) throw new Error('Scan aborted by user.');
 
-            const response: SPHttpClientResponse = await this._spHttpClient.get(endpoint, SPHttpClient.configurations.v1);
-            const json = await response.json();
+                // Simple recursive query to get all items
+                console.log(`Deep Scan: Fetching batch via GET: ${nextLink}`);
+                const response: SPHttpClientResponse = await this._spHttpClient.get(
+                    nextLink,
+                    SPHttpClient.configurations.v1
+                );
 
-            if (json?.value) {
-                const allItems: any[] = json.value; // Keep any here for raw JSON but cast specifically later if needed or define interface
-                const uniqueItems = allItems.filter((i: { HasUniqueRoleAssignments: boolean }) => i.HasUniqueRoleAssignments === true);
-
-                if (uniqueItems.length === 0) return [];
-
-                // Now fetch permissions for these specific items
-                // To avoid making too many parallel calls, we'll process them in chunks or Promise.all
-
-                const results: IItemPermission[] = [];
-
-                // Limit parallelism to avoid 429 throttling
-                const chunks = this.chunkArray(uniqueItems, 5);
-
-                for (const chunk of chunks) {
-                    const promises = chunk.map(async (item: any) => {
-                        try {
-                            // Fetch roles
-                            const permEndpoint = `${this._webUrl}/_api/web/lists(guid'${listId}')/items(${item.Id})/roleassignments?$expand=Member,RoleDefinitionBindings`;
-                            const permResp = await this._spHttpClient.get(permEndpoint, SPHttpClient.configurations.v1);
-                            const permJson = await permResp.json();
-                            const roles = permJson?.value ? permJson.value.map((ra: any) => this._mapRoleAssignment(ra)) : [];
-
-                            return {
-                                Id: item.Id,
-                                Title: item.FileLeafRef || item.Title, // Use filename for files
-                                ServerRelativeUrl: item.FileRef,
-                                FileSystemObjectType: item.FileSystemObjectType,
-                                RoleAssignments: roles
-                            } as IItemPermission;
-                        } catch (e) {
-                            console.error(`Error fetching perms for item ${item.Id}`, e);
-                            return null;
-                        }
-                    });
-
-                    const chunkResults = await Promise.all(promises);
-                    chunkResults.forEach((r) => { if (r) results.push(r); });
+                if (!response.ok) {
+                    console.error(`Deep Scan: Error fetching item IDs. Status: ${response.status}`);
+                    break;
                 }
 
+                const json = await response.json();
+                const items = json.value ? json.value : (json.d && json.d.results ? json.d.results : []);
+
+                // Add to candidates
+                candidates.push(...items);
+                console.log(`Deep Scan: Fetched ${items.length} items. Total so far: ${candidates.length}`);
+
+                // Update paging
+                if (json['@odata.nextLink']) {
+                    nextLink = json['@odata.nextLink'];
+                } else if (json.d && json.d.__next) {
+                    nextLink = json.d.__next;
+                } else {
+                    nextLink = undefined;
+                    hasMore = false;
+                }
+            }
+
+            console.log(`Deep Scan: Found ${candidates.length} candidate items (Total Fetched). Checking details for uniqueness...`);
+
+            // 2. Batch Process Candidates to check Unique Permissions
+            // We chunk candidates and use SPHttpClientBatch
+            if (candidates.length > 0) {
+                // Chunk size 40 (Batch limit is usually 100, keep safe)
+                // Optimization: We already have HasUniqueRoleAssignments from REST call!
+                // We only need to fetch Roles for those that are unique.
+                // Filter batch to ONLY unique items logic?
+                // Actually existing logic re-checks checks 'HasUniqueRoleAssignments'?
+                // Let's optimize: checking HasUnique is redundant if we trust properties from fetch?
+                // Yes, we selected HasUniqueRoleAssignments in the GET above.
+
+                // Filter chunk to only Unique items to save batch calls?
+                // Wait, Step 2 was "Check Unique Permissions".
+                // Now that we have it from Step 1, we can skip directly to "Fetch Roles" (Step 3) for unique ones!
+
+                // BUT, Step 3 requires 'HasUnique' check result. 
+                // Let's rewrite this part. We can skip the 'Batch Check' step entirely and go straight to fetching roles for unique items.
+
+                // Let's filter candidates down to unique ones immediatley.
+
+                // REFACTOR: Skip Step 2 entirely if we have HasUniqueRoleAssignments
+                const uniqueItems = candidates.filter(c => c.HasUniqueRoleAssignments === true);
+                console.log(`Deep Scan: ${uniqueItems.length} items have unique permissions. Fetching roles...`);
+
+                // 3. Fetch Roles for Unique Items
+                if (uniqueItems.length > 0) {
+                    // Reuse existing Step 3 logic but map 'r' structure correctly
+                    const roleChunks = this.chunkArray(uniqueItems, 20); // Smaller chunks for heavy expansion
+                    for (const rChunk of roleChunks) {
+                        if (signal?.aborted) throw new Error('Scan aborted by user.');
+
+                        // Parallel fetch for confirmed unique
+                        await Promise.all(rChunk.map(async (item: any) => {
+                            try {
+                                const id = item.Id || item.ID;
+                                const raEndpoint = `${this._webUrl}/_api/web/lists(guid'${listId}')/items(${id})/roleassignments?$expand=Member,RoleDefinitionBindings`;
+                                const raResp = await this._spHttpClient.get(raEndpoint, SPHttpClient.configurations.v1);
+                                if (raResp.ok) {
+                                    const raJson = await raResp.json();
+                                    const roleAssignments = raJson.value ? raJson.value.map((assignment: any) => this._mapRoleAssignment(assignment)) : [];
+
+                                    // Map Item
+                                    const fsObjType = (item.FileSystemObjectType === 1 || item.FSObjType == "1") ? 1 : 0;
+
+                                    // Prioritize FileLeafRef from details if original missing
+                                    const name = item.FileLeafRef || item.Title || `Item ${id}`;
+                                    const url = item.FileRef;
+
+                                    results.push({
+                                        Id: Number.parseInt(id),
+                                        Title: name,
+                                        ServerRelativeUrl: url,
+                                        FileSystemObjectType: fsObjType,
+                                        RoleAssignments: roleAssignments
+                                    });
+                                }
+                            } catch (e) {
+                                console.warn(`Failed to fetch roles for item ${item.Id}`, e);
+                            }
+                        }));
+                    }
+                }
+
+                // Return early to avoid running the old logic below
                 return results;
             }
-            return [];
+
+            // Old logic block below (needs to be removed or bypassed)
+            // The original code had a `console.log` and `return results` here, which is now moved inside the `if (candidates.length > 0)` block.
+            // This effectively removes the old logic.
+            console.log(`Deep Scan: Finished. Total items scanned: ${candidates.length}. Total unique found: ${results.length}`);
+            return results;
+
         } catch (error) {
             console.error(`Error scanning items for list ${listId}`, error);
+            if (error instanceof Error && error.message === 'Scan aborted by user.') throw error;
             return [];
         }
     }
@@ -307,6 +373,66 @@ export class PermissionService implements IPermissionService {
     public async removeSitePermission(principalId: number): Promise<boolean> {
         const endpoint = `${this._webUrl}/_api/web/roleassignments/getbyprincipalid(${principalId})`;
         return this._removeRoleAssignment(endpoint);
+    }
+
+    public async removeUserFromUserInfoList(principalId: number): Promise<boolean> {
+        try {
+            const endpoint = `${this._webUrl}/_api/web/siteusers/removebyid(${principalId})`;
+            const response: SPHttpClientResponse = await this._spHttpClient.post(
+                endpoint,
+                SPHttpClient.configurations.v1,
+                {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (response.ok) {
+                console.log(`[PermissionService] Successfully removed user ${principalId} from User Info List. Adding to mask.`);
+                this._knownRemovedIds.add(principalId);
+                return true;
+            }
+
+            // If user is not found, they are effectively removed
+            if (response.status === 404) {
+                console.warn(`User ${principalId} not found in User Info List, considering removed.`);
+                this._knownRemovedIds.add(principalId);
+                return true;
+            }
+
+            const errorText = await response.text();
+            console.warn(`[PermissionService] Standard removebyid failed for user ${principalId}. Status: ${response.status}. Trying fallback deleteObject method...`);
+
+            // Fallback: Try getting the user object and calling deleteObject (DELETE method)
+            const fallbackEndpoint = `${this._webUrl}/_api/web/siteusers/getbyid(${principalId})`;
+            const fallbackResponse: SPHttpClientResponse = await this._spHttpClient.post(
+                fallbackEndpoint,
+                SPHttpClient.configurations.v1,
+                {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-HTTP-Method': 'DELETE'
+                    }
+                }
+            );
+
+            if (fallbackResponse.ok) {
+                console.log(`[PermissionService] Fallback deleteObject successful for user ${principalId}. Adding to mask.`);
+                this._knownRemovedIds.add(principalId);
+                return true;
+            }
+
+            const fallbackError = await fallbackResponse.text();
+            console.error(`[PermissionService] Fallback delete also failed. Status: ${fallbackResponse.status}`, fallbackError);
+            return false;
+
+        } catch (error) {
+            console.error(`Error removing user ${principalId} from User Info List`, error);
+            return false;
+        }
     }
 
     public async removeListPermission(listId: string, principalId: number): Promise<boolean> {
@@ -664,43 +790,572 @@ export class PermissionService implements IPermissionService {
     public async getOrphanedUsers(): Promise<IUser[]> {
         try {
             const allUsers = await this._getAllSiteUsers();
-            // Simple heuristic: Users with no email, not system, not sharing links, not admin
-            const systemUsers = new Set(['System Account', 'SharePoint App', String.raw`NT AUTHORITY\authenticated users`, 'spsearch']);
 
-            return allUsers.filter(u =>
-                !u.Email &&
+            // Filter potentially orphaned users
+            // 1. Valid PrincipalType (User = 1)
+            // 2. Not Site Admin (usually safely managed) - though admins can be orphaned, let's include them if they aren't "System"
+            // 3. Not System Accounts
+
+            const systemUsers = new Set(['System Account', 'SharePoint App', 'NT AUTHORITY\\authenticated users', 'spsearch']);
+
+            const candidates = allUsers.filter(u =>
                 u.PrincipalType === 1 &&
-                !u.IsSiteAdmin &&
                 !systemUsers.has(u.Title) &&
                 !u.Title.includes('SharingLinks') &&
-                !u.LoginName?.includes('nt service')
+                !u.LoginName?.toLowerCase().includes('nt service') &&
+                !u.LoginName?.toLowerCase().includes('sharepoint app')
             );
+            if (candidates.length === 0 || !this._msGraphClientFactory) {
+                return [];
+            }
+
+            return await this._checkOrphanCandidates(candidates);
+
         } catch (error) {
             console.error("Error fetching orphaned users", error);
             return [];
         }
     }
 
+    public async debugItemPermissions(listTitle: string, itemQuery: string): Promise<string> {
+        try {
+            // 1. Get List
+            const listUrl = `${this._webUrl}/_api/web/lists/getbytitle('${listTitle}')`;
+
+            // 2. Search for item by FileLeafRef or Title
+            // Using CAML for partial match
+            const queryPayload = {
+                query: {
+                    ViewXml: `<View Scope="RecursiveAll">
+                                    <Query>
+                                        <Where>
+                                            <Or>
+                                                <Contains><FieldRef Name="FileLeafRef"/><Value Type="Text">${itemQuery}</Value></Contains>
+                                                <Contains><FieldRef Name="Title"/><Value Type="Text">${itemQuery}</Value></Contains>
+                                            </Or>
+                                        </Where>
+                                    </Query>
+                                    <ViewFields>
+                                        <FieldRef Name="ID"/><FieldRef Name="Title"/><FieldRef Name="FileLeafRef"/><FieldRef Name="FileRef"/><FieldRef Name="HasUniqueRoleAssignments"/>
+                                    </ViewFields>
+                                    <RowLimit>10</RowLimit>
+                                  </View>`
+                }
+            };
+
+            const endpoint = `${listUrl}/GetItems`;
+            const response = await this._spHttpClient.post(endpoint, SPHttpClient.configurations.v1, { body: JSON.stringify(queryPayload) });
+            const json = await response.json();
+            const items = json.value || (json.d && json.d.results) || [];
+
+            if (items.length === 0) return `No items found matching '${itemQuery}' in '${listTitle}'.`;
+
+            let log = `Found ${items.length} items. Analyzing first match:\n`;
+            const item = items[0];
+            const name = item.FileLeafRef || item.Title;
+
+            log += `Item: ${name} (ID: ${item.ID || item.Id})\n`;
+            log += `URL: ${item.FileRef}\n`;
+            log += `HasUniqueRoleAssignments: ${item.HasUniqueRoleAssignments}\n`;
+
+            if (!item.HasUniqueRoleAssignments) {
+                log += `-> Inherits permissions from parent. Check parent permissions.\n`;
+            } else {
+                // Fetch Roles
+                const roleUrl = `${listUrl}/items(${item.ID || item.Id})/roleassignments?$expand=Member,RoleDefinitionBindings`;
+                const rResp = await this._spHttpClient.get(roleUrl, SPHttpClient.configurations.v1);
+                const rJson = await rResp.json();
+                const roles = rJson.value || (rJson.d && rJson.d.results) || [];
+
+                log += `-> Found ${roles.length} role assignments:\n`;
+                roles.forEach((r: any) => {
+                    const type = r.Member.PrincipalType; // 1=User, 4=SecurityGroup, 8=SPGroup
+                    log += `   - [${type}] ${r.Member.LoginName} (${r.Member.Title})\n`;
+                    if (r.RoleDefinitionBindings) {
+                        const perms = (r.RoleDefinitionBindings.results || r.RoleDefinitionBindings).map((d: any) => d.Name).join(', ');
+                        log += `     Permissions: ${perms}\n`;
+                    }
+                });
+            }
+
+            return log;
+
+        } catch (error: any) {
+            return "Error during debug: " + (error.message || error);
+        }
+    }
+
+
+
+    public async checkOrphansForRoleAssignments(roles: IRoleAssignment[]): Promise<IRoleAssignment[]> {
+        try {
+            const uniqueUsersMap = new Map<string, IUser>();
+
+            roles.forEach(r => {
+                if (r.Member.PrincipalType === 1) { // User
+                    const key = r.Member.LoginName || r.Member.Email;
+                    if (key && !uniqueUsersMap.has(key)) {
+                        uniqueUsersMap.set(key, r.Member as IUser);
+                    }
+                }
+            });
+
+            if (uniqueUsersMap.size > 0 && this._msGraphClientFactory) {
+                const usersToCheck = Array.from(uniqueUsersMap.values());
+                const orphanedUsers = await this._checkOrphanCandidates(usersToCheck);
+
+                // Create a map of orphan status for quick lookup (though objects are ref updated, this ensures we map back if needed)
+                const orphanStatusMap = new Map<string, string>();
+                orphanedUsers.forEach(u => {
+                    const key = u.LoginName || u.Email;
+                    if (key && u.OrphanStatus) {
+                        orphanStatusMap.set(key, u.OrphanStatus);
+                    }
+                });
+
+                // Ensure all roles reflect the status (in case of multiple roles for same user)
+                roles.forEach(r => {
+                    if (r.Member.PrincipalType === 1) {
+                        const key = r.Member.LoginName || r.Member.Email;
+                        if (key && orphanStatusMap.has(key)) {
+                            r.Member.OrphanStatus = orphanStatusMap.get(key) as any;
+                        }
+                    }
+                });
+            }
+            return roles;
+        } catch (error) {
+            console.error("Error checking orphans for roles", error);
+            return roles;
+        }
+    }
+
+    public maskOrphanedUser(userId: number): void {
+        console.log(`[PermissionService] Masking orphaned user ID: ${userId}`);
+        this._knownRemovedIds.add(userId);
+    }
+
+    public async checkOrphanUsers(users: IUser[]): Promise<IUser[]> {
+        return this._checkOrphanCandidates(users);
+    }
+
+    private async _checkOrphanCandidates(candidates: IUser[]): Promise<IUser[]> {
+        if (!this._msGraphClientFactory) return [];
+
+        console.log("[OrphanCheck] Raw candidates:", candidates.map(c => ({ Title: c.Title, Type: c.PrincipalType, Id: c.Id })));
+
+        // Filter out known removed IDs first AND ensure we only check Users (PrincipalType 1)
+        // PrincipalType 4 are Security Groups, which will return 404 on /users endpoint
+        // Also check if LoginName indicates a group claim (e.g. starts with c:0-.t)
+        const effectiveCandidates = candidates.filter(u => {
+            if (this._knownRemovedIds.has(u.Id)) return false;
+            // Explicitly allow ONLY PrincipalType 1 (User)
+            if (u.PrincipalType !== 1) return false;
+
+            // Extra safety: Check LoginName patterns common for groups but sometimes mislabeled
+            // c:0-.t, c:0+.w, c:0t.c are typically claims for groups/tenants/system
+            // We'll exclude anything starting with c:0 to be safe as these aren't simple user object lookups
+            if (u.LoginName && (u.LoginName.indexOf('c:0') === 0)) {
+                return false;
+            }
+
+            return true;
+        });
+
+        if (effectiveCandidates.length === 0) return [];
+
+        console.log(`[OrphanCheck] Total Candidates: ${candidates.length}, To Query Graph: ${effectiveCandidates.length}`);
+
+        // Get Graph Client
+        const graphClient = await this._msGraphClientFactory.getClient("3");
+
+        const orphanedUsers: IUser[] = [];
+        const toQuery: IUser[] = [];
+
+        // 1. Check Cache
+        for (const u of effectiveCandidates) {
+            const key = u.Email || u.LoginName; // Simple key for now
+            if (key && this._userOrphanCache.has(key)) {
+                const status = this._userOrphanCache.get(key);
+                if (status && status !== 'Active') {
+                    u.OrphanStatus = status;
+                    orphanedUsers.push(u);
+                }
+            } else {
+                toQuery.push(u);
+            }
+        }
+
+        console.log(`[OrphanCheck] Total Candidates: ${candidates.length}, To Query Graph: ${toQuery.length}`);
+
+        if (toQuery.length === 0) {
+            return orphanedUsers;
+        }
+
+        // 2. Query Uncached
+        const batchSize = 20;
+        const chunks = this.chunkArray(toQuery, batchSize);
+
+        for (const chunk of chunks) {
+            // Construct Batch Request
+            const batchRequests = {
+                requests: chunk.map((u, index) => {
+                    let userIdentifier = u.Email;
+                    if (!userIdentifier && u.LoginName) {
+                        const parts = u.LoginName.split('|');
+                        if (parts.length > 0) userIdentifier = parts[parts.length - 1];
+                    }
+
+                    return {
+                        id: index.toString(),
+                        method: "GET",
+                        url: `/users/${userIdentifier}?$select=accountEnabled,userPrincipalName,displayName`
+                    };
+                })
+            };
+
+            try {
+                // Send Batch
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                const response = await graphClient.api('/$batch').post(batchRequests);
+
+                // Process Responses
+                if (response && response.responses) {
+                    response.responses.forEach((res: any) => {
+                        const reqId = Number(res.id);
+                        const user = chunk[reqId];
+                        const key = user.Email || user.LoginName;
+
+                        if (res.status === 404) {
+                            user.OrphanStatus = 'Deleted';
+                            orphanedUsers.push(user);
+                            if (key) this._userOrphanCache.set(key, 'Deleted');
+                        } else if (res.status === 200) {
+                            const adUser = res.body;
+                            if (adUser.accountEnabled === false) {
+                                user.OrphanStatus = 'Disabled';
+                                orphanedUsers.push(user);
+                                if (key) this._userOrphanCache.set(key, 'Disabled');
+                            } else if (key) {
+                                this._userOrphanCache.set(key, 'Active');
+                            }
+                        } else {
+                            // Error - don't cache as active, might be transient
+                        }
+                    });
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+            } catch (batchError) {
+                console.error("Batch request failed", batchError);
+            }
+        }
+        console.log(`[OrphanCheck] Final Orphans Detected: ${orphanedUsers.map(u => u.LoginName).join(', ')}`);
+        return orphanedUsers;
+    }
+
+
+    public async checkOversharingFolders(listId: string, signal?: AbortSignal): Promise<IOversharedFolder[]> {
+        const results: IOversharedFolder[] = [];
+        try {
+            console.log(`[Oversharing] Starting SHALLOW folder scan for List ${listId}`);
+
+            // 1. Get List Root Folder URL
+            const listUrl = `${this._webUrl}/_api/web/lists(guid'${listId}')/rootfolder?$select=ServerRelativeUrl,Name`;
+            const listResp = await this._spHttpClient.get(listUrl, SPHttpClient.configurations.v1);
+            if (!listResp.ok) throw new Error("Failed to get list root folder");
+            const listJson = await listResp.json();
+            const rootUrl = listJson.ServerRelativeUrl;
+            const encodedRootUrl = encodeURIComponent(rootUrl).replace(/'/g, "''");
+
+            // 2. Scan Top-Level Folders Only
+            const foldersUrl = `${this._webUrl}/_api/web/GetFolderByServerRelativeUrl('${encodedRootUrl}')/Folders?$select=Name,ServerRelativeUrl,ItemCount&$filter=Name ne 'Forms'&$top=2000`;
+            const fResp = await this._spHttpClient.get(foldersUrl, SPHttpClient.configurations.v1);
+
+            if (fResp && fResp.ok) {
+                const fJson = await fResp.json();
+                const folders = fJson.value || [];
+
+                // Helper to fetch (reusing logic but simple fetch here is fine)
+                const simpleFetcher = async (url: string) => this._spHttpClient.get(url, SPHttpClient.configurations.v1);
+
+                for (const folder of folders) {
+                    if (signal?.aborted) return results;
+                    await this._checkItemForEveryone(folder.ServerRelativeUrl, true, results, simpleFetcher);
+                }
+            }
+
+            return results;
+
+        } catch (error: any) {
+            console.error("Error checking folder oversharing", error);
+            if (signal?.aborted) throw new Error("Scan aborted");
+            return [];
+        }
+    }
+
+
+    public async checkOversharingRootItems(listId: string, signal?: AbortSignal): Promise<IOversharedFolder[]> {
+        const results: IOversharedFolder[] = [];
+        try {
+            console.log(`[Oversharing] Starting root item scan for List ${listId}`);
+
+            // 1. Get List Root Folder URL
+            const listUrl = `${this._webUrl}/_api/web/lists(guid'${listId}')/rootfolder?$select=ServerRelativeUrl,Name`;
+            const listResp = await this._spHttpClient.get(listUrl, SPHttpClient.configurations.v1);
+            if (!listResp.ok) throw new Error("Failed to get list root folder");
+            const listJson = await listResp.json();
+            const rootUrl = listJson.ServerRelativeUrl;
+            const encodedRootUrl = encodeURIComponent(rootUrl).replace(/'/g, "''");
+
+            // Retry Helper
+            const fetchWithRetry = async (url: string, retries = 3): Promise<SPHttpClientResponse | null> => {
+                for (let i = 0; i < retries; i++) {
+                    if (signal?.aborted) return null;
+                    const response = await this._spHttpClient.get(url, SPHttpClient.configurations.v1);
+                    if (response.status === 429 || response.status === 503) {
+                        console.log(`[Oversharing] Throttled at ${url}, retrying...`);
+                        await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+                        continue;
+                    }
+                    return response;
+                }
+                return null;
+            };
+
+            // 2. Scan Root Folders
+            let skip = 0;
+            const top = 5000;
+            while (true) {
+                if (signal?.aborted) break;
+                const subUrl = `${this._webUrl}/_api/web/GetFolderByServerRelativeUrl('${encodedRootUrl}')/Folders?$select=Name,ServerRelativeUrl,ItemCount&$filter=Name ne 'Forms'&$top=${top}&$skip=${skip}`;
+                const sResp = await fetchWithRetry(subUrl);
+                if (!sResp || !sResp.ok) break;
+                const sJson = await sResp.json();
+                const folders = sJson.value || [];
+
+                for (const folder of folders) {
+                    if (signal?.aborted) return results;
+                    await this._checkItemForEveryone(folder.ServerRelativeUrl, true, results, fetchWithRetry);
+                }
+
+                if (folders.length < top) break;
+                skip += top;
+            }
+
+            // 3. Scan Root Files
+            skip = 0;
+            while (true) {
+                if (signal?.aborted) break;
+                const filesUrl = `${this._webUrl}/_api/web/GetFolderByServerRelativeUrl('${encodedRootUrl}')/Files?$select=Name,ServerRelativeUrl&$top=${top}&$skip=${skip}`;
+                const fResp = await fetchWithRetry(filesUrl);
+                if (!fResp || !fResp.ok) break;
+                const fJson = await fResp.json();
+                const files = fJson.value || [];
+
+                for (const file of files) {
+                    if (signal?.aborted) return results;
+                    await this._checkItemForEveryone(file.ServerRelativeUrl, false, results, fetchWithRetry);
+                }
+
+                if (files.length < top) break;
+                skip += top;
+            }
+
+            return results;
+
+        } catch (error: any) {
+            console.error("Error checking root items oversharing", error);
+            if (signal?.aborted) throw new Error("Scan aborted");
+            return [];
+        }
+    }
+
+    private async _checkItemForEveryone(
+        itemUrl: string,
+        isFolder: boolean,
+        results: IOversharedFolder[],
+        fetcher: (url: string) => Promise<SPHttpClientResponse | null>
+    ): Promise<boolean> {
+        const encodedItemUrl = encodeURIComponent(itemUrl).replace(/'/g, "''");
+
+        // Construct correct endpoint based on item type
+        const typeSegment = isFolder ? `GetFolderByServerRelativeUrl('${encodedItemUrl}')` : `GetFileByServerRelativeUrl('${encodedItemUrl}')`;
+        // Add timestamp to prevent caching of permission checks
+        const rolesUrl = `${this._webUrl}/_api/web/${typeSegment}/ListItemAllFields/RoleAssignments?$expand=Member,RoleDefinitionBindings&t=${new Date().getTime()}`;
+
+        try {
+            const rolesResp = await fetcher(rolesUrl);
+
+            if (rolesResp && rolesResp.ok) {
+                const rolesJson = await rolesResp.json();
+                const roles = rolesJson.value || (rolesJson.d && rolesJson.d.results) || [];
+
+                for (const r of roles) {
+                    if (!r.Member) continue;
+
+                    // Filter out Limited Access - strictly
+                    const validBindings = (r.RoleDefinitionBindings || []).filter((d: any) => d.Name !== 'Limited Access');
+                    if (validBindings.length === 0) continue; // User only has Limited Access, so skip
+
+                    const title = r.Member.Title || '';
+                    const login = r.Member.LoginName || '';
+
+                    const isEveryone = (
+                        title === 'Everyone' ||
+                        title === 'Everyone except external users' ||
+                        (login && login.indexOf('spo-grid-all-users') >= 0) ||
+                        (login && login.indexOf('Everyone') >= 0) // Keeping broad for now but Limited Access filter should fix the main issue
+                    );
+
+                    if (isEveryone) {
+                        const perms = validBindings.map((d: any) => d.Name).join(', ');
+                        results.push({
+                            Name: itemUrl.split('/').pop() || (isFolder ? 'Folder' : 'File'),
+                            Path: itemUrl,
+                            SharedWith: title,
+                            LoginName: login,
+                            Permissions: perms,
+                            PrincipalType: r.Member.PrincipalType
+                        });
+                        console.log(`[Oversharing] MATCH! ${title} found at ${itemUrl}`);
+                        return true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`[Oversharing] Error checking item ${itemUrl}`, e);
+        }
+        return false;
+    }
+
+
+    public async scanFolderContents(folderUrl: string, signal?: AbortSignal): Promise<IOversharedFolder[]> {
+        console.log(`[Oversharing] Scanning folder contents for: ${folderUrl}`);
+        const results: IOversharedFolder[] = [];
+
+        // Helper for this scan to reuse Logic
+        const fetchWithRetry = async (url: string, retries = 3): Promise<SPHttpClientResponse | null> => {
+            let attempt = 0;
+            while (attempt < retries) {
+                if (signal?.aborted) return null;
+                try {
+                    const response = await this._spHttpClient.get(url, SPHttpClient.configurations.v1);
+                    if (response.status === 429) {
+                        const retryAfter = response.headers.get('Retry-After');
+                        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2000 * Math.pow(2, attempt);
+                        console.warn(`Throttled. Waiting ${waitTime}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        attempt++;
+                        continue;
+                    }
+                    return response;
+                } catch (err) {
+                    console.error("Fetch error", err);
+                    attempt++;
+                }
+            }
+            return null;
+        };
+
+        try {
+            // We want to scan the contents of THIS folder.
+            // So we call _scanFoldersRecursive on this folder, BUT we need a way to force it to check children even if the Root itself is shared?
+            // Actually, if the Root is shared, everything inside is shared.
+            // But the user wants to see the items.
+            // The existing _scanFoldersRecursive STOPS if it finds an Overshared folder.
+            // We should arguably use a modified recursive function OR just reuse logic but ignore the "Stop" flag for the top level?
+
+            // Let's implement a specific recursive scanner for this "Deep Dive" that records everything that is effectively shared.
+            // If the parent is shared, should we list every single file inside? That could be huge.
+            // Or should we just list unique permissions inside?
+            // "Scan the folders and files" implies listing what is accessible.
+
+            // Let's assume we want to find *explicitly* shared items inside, OR items that inherit from this shared folder?
+            // If the folder itself is "Everyone", then listing 10,000 items inside as "Everyone" is spammy.
+            // Maybe the user wants to check if *subfolders* have broken inheritance and are *more* open? Or just to verify?
+
+            // Let's stick to the "Find Overshared Items" logic.
+            // If I am scanning "Public", and it is shared with Everyone.
+            // I want to see if "Public/Secret" is ALSO shared (inherited).
+            // Yes, list it. The user wants to know what is exposed.
+            // But maybe limit depth or count?
+
+            // Let's use a simpler approach: Just scan immediate children (1 level deep? or recursive?)
+            // "Scan folders and files" usually means everything.
+            // Let's do recursive but be careful.
+
+            await this._scanFolderContentsRecursive(folderUrl, results, signal, fetchWithRetry);
+
+            return results;
+        } catch (error) {
+            console.error("Error scanning folder contents", error);
+            return [];
+        }
+    }
+
+    private async _scanFolderContentsRecursive(
+        folderUrl: string,
+        results: IOversharedFolder[],
+        signal: AbortSignal | undefined,
+        fetcher: (url: string) => Promise<SPHttpClientResponse | null>
+    ) {
+        if (signal?.aborted) return;
+        const encodedFolderUrl = encodeURIComponent(folderUrl).replace(/'/g, "''");
+
+        // 1. Get Folders
+        const foldersUrl = `${this._webUrl}/_api/web/GetFolderByServerRelativeUrl('${encodedFolderUrl}')/Folders?$select=Name,ServerRelativeUrl,ItemCount&$filter=Name ne 'Forms'&$top=2000`;
+        const fResp = await fetcher(foldersUrl);
+        if (fResp && fResp.ok) {
+            const fJson = await fResp.json();
+            const folders = fJson.value || [];
+
+            for (const folder of folders) {
+                if (signal?.aborted) return;
+
+                // Check permissions
+                await this._checkItemForEveryone(folder.ServerRelativeUrl, true, results, fetcher);
+
+                // Recurse
+                await this._scanFolderContentsRecursive(folder.ServerRelativeUrl, results, signal, fetcher);
+            }
+        }
+
+        // 2. Get Files
+        const filesUrl = `${this._webUrl}/_api/web/GetFolderByServerRelativeUrl('${encodedFolderUrl}')/Files?$select=Name,ServerRelativeUrl&$top=2000`;
+        const fileResp = await fetcher(filesUrl);
+        if (fileResp && fileResp.ok) {
+            const fileJson = await fileResp.json();
+            const files = fileJson.value || [];
+
+            for (const file of files) {
+                if (signal?.aborted) return;
+                await this._checkItemForEveryone(file.ServerRelativeUrl, false, results, fetcher);
+            }
+        }
+    }
     private async _getAllSiteUsers(): Promise<IUser[]> {
         try {
-            const endpoint = `${this._webUrl}/_api/web/siteusers`;
+            // Add timestamp to prevent browser caching
+            const endpoint = `${this._webUrl}/_api/web/siteusers?t=${new Date().getTime()}`;
             const response: SPHttpClientResponse = await this._spHttpClient.get(endpoint, SPHttpClient.configurations.v1);
 
             if (!response.ok) {
-                console.error(`Error fetching site users: ${response.status} ${response.statusText}`);
-                try {
-                    const errorText = await response.text();
-                    console.error("Error details:", errorText);
-                } catch (e) {
-                    console.error("Could not read error details", e);
-                }
                 return [];
             }
 
             const json = await response.json();
 
             if (json?.value) {
-                return json.value.map((u: any) => ({
+                console.log(`[OrphanCheck] _getAllSiteUsers returned ${json.value.length} users from SharePoint.`);
+                // Log known removed IDs to debug persistence
+                console.log(`[OrphanCheck] _knownRemovedIds: ${Array.from(this._knownRemovedIds).join(', ')}`);
+
+                const filtered = json.value.filter((u: any) => !this._knownRemovedIds.has(u.Id));
+                console.log(`[OrphanCheck] After filtering known removed: ${filtered.length} users.`);
+
+                return filtered.map((u: any) => ({
                     Id: u.Id,
                     Title: u.Title,
                     Email: u.Email,
@@ -779,7 +1434,14 @@ export class PermissionService implements IPermissionService {
     private _mapRoleAssignment(item: any): IRoleAssignment {
         return {
             PrincipalId: item.PrincipalId,
-            Member: item.Member,
+            Member: {
+                Id: item.Member.Id,
+                Title: item.Member.Title,
+                LoginName: item.Member.LoginName,
+                Email: item.Member.Email || "",
+                PrincipalType: item.Member.PrincipalType,
+                IsHiddenInUI: item.Member.IsHiddenInUI || false
+            },
             RoleDefinitionBindings: item.RoleDefinitionBindings ? item.RoleDefinitionBindings.filter((b: any) => b.Name !== 'Limited Access') : []
         };
     }
@@ -843,13 +1505,81 @@ export class PermissionService implements IPermissionService {
         { bit: 0x00000020, name: "Open Items" },
         { bit: 0x00000040, name: "View Versions" },
         { bit: 0x00000080, name: "Delete Versions" },
+        { bit: 0x00000100, name: "Cancel Checkout" },
+        { bit: 0x00000200, name: "Manage Personal Views" },
         { bit: 0x00000800, name: "Manage Lists" },
-        { bit: 0x00020000, name: "View Pages" },
-        { bit: 0x00040000, name: "Enumerate Permissions" },
-        { bit: 0x01000000, name: "Create Groups" },
-        { bit: 0x02000000, name: "Manage Permissions" },
-        { bit: 0x04000000, name: "Browse User Info" }
+        { bit: 0x00001000, name: "View Pages" },
+        { bit: 0x00002000, name: "Add and Customize Pages" },
+        { bit: 0x00004000, name: "Apply Theme and Border" },
+        { bit: 0x00008000, name: "Apply Style Sheets" },
+        { bit: 0x00010000, name: "View Usage Data" },
+        { bit: 0x00020000, name: "Create SSCSite" },
+        { bit: 0x00040000, name: "Manage Subwebs" },
+        { bit: 0x00080000, name: "Create Groups" },
+        { bit: 0x00100000, name: "Manage Permissions" },
+        { bit: 0x00200000, name: "Browse Directories" },
+        { bit: 0x00400000, name: "Browse User Information" },
+        { bit: 0x00800000, name: "Add Del Private Web Parts" },
+        { bit: 0x01000000, name: "Update Personal Web Parts" },
+        { bit: 0x02000000, name: "Manage Web" },
+        { bit: 0x04000000, name: "Anonymous Search Access List" },
+        { bit: 0x08000000, name: "Use Client Integration" },
+        { bit: 0x10000000, name: "Use Remote APIs" },
+        { bit: 0x20000000, name: "Manage Alerts" },
+        { bit: 0x40000000, name: "Create Alerts" },
+        { bit: 0x80000000, name: "Edit My User Information" },
     ];
+
+    public async getAADGroupMembers(loginName: string, title: string): Promise<IUser[]> {
+        if (!this._msGraphClientFactory) {
+            console.warn("MSGraphClientFactory not available");
+            return [];
+        }
+
+        try {
+            const client = await this._msGraphClientFactory.getClient("3"); // Use v3 client
+
+            // 1. Try to find the group in Graph
+            // We search by displayName. This is not perfect but often sufficient for SP Groups mapping to AAD Groups.
+            const groupsResponse = await client.api('/groups')
+                .filter(`displayName eq '${title}'`)
+                .select('id,displayName,groupTypes')
+                .get();
+
+            const groups = groupsResponse.value;
+            if (!groups || groups.length === 0) {
+                console.warn(`AAD Group '${title}' not found in Graph.`);
+                return [];
+            }
+
+            // Use the first match
+            const groupId = groups[0].id;
+
+            // 2. Fetch members (transitive)
+            const membersResponse = await client.api(`/groups/${groupId}/transitiveMembers`)
+                .select('id,displayName,userPrincipalName,mail,accountEnabled')
+                .top(100)
+                .get();
+
+            const members = membersResponse.value;
+
+            // 3. Map to IUser
+            return members.map((m: any) => ({
+                Id: 0,
+                Title: m.displayName,
+                Email: m.mail || m.userPrincipalName,
+                LoginName: m.userPrincipalName,
+                PrincipalType: m['@odata.type'] === '#microsoft.graph.group' ? 8 : 1,
+                IsHiddenInUI: false,
+                IsSiteAdmin: false,
+                OrphanStatus: m.accountEnabled === false ? 'Disabled' : undefined
+            }));
+
+        } catch (error) {
+            console.error("Error fetching AAD group members", error);
+            return [];
+        }
+    }
 
     private _parseBasePermissions(perms: { High: number; Low: number }): string[] {
         const rights: string[] = [];
