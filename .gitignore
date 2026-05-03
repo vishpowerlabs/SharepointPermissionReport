@@ -37,3 +37,8 @@ config/private.json
 
 # OS Generated
 Thumbs.db
+
+# Ignore root markdown files except readme.md
+/*.md
+!/readme.md
+!/README.md
