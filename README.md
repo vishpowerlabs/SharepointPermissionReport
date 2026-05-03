@@ -48,6 +48,6 @@ The web part is highly customizable to perfectly fit your site's needs. Use the 
 
 For a comprehensive dive into all features—including the Deep Clean (Orphaned User Scanner), Check Access Audit Tools, and Theme Awareness capabilities:
 
-**👉 [Visit our Blog for the Full Feature Breakdown](https://vishpowerlabs.com/blog/sharepoint-permission-viewer)**
+**👉 [Visit our Blog for the Full Feature Breakdown](https://www.wrvishnu.com/2026/03/29/one-view-every-permission-introducing-the-sharepoint-permission-viewer-web-part/**
 
 *(See `blog.md` and `presentation.md` in this repository for offline feature documentation and architecture details.)*
