@@ -4,6 +4,7 @@
         "name": "permission-viewer-client-side-solution",
         "id": "76d5422e-a579-4a00-99b3-192667104868",
         "version": "1.0.0.0",
+        "iconPath": "assets/package-icon.png",
         "includeClientSideAssets": true,
         "skipFeatureDeployment": true,
         "isDomainIsolated": false,

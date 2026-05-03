@@ -42,3 +42,7 @@ Thumbs.db
 /*.md
 !/readme.md
 !/README.md
+
+# Ignore image folders
+image/
+images/
